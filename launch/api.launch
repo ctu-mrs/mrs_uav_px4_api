@@ -34,6 +34,7 @@
       <param name="topic_prefix" type="string" value="/$(arg UAV_NAME)/" />
       <param name="uav_name" type="string" value="$(arg UAV_NAME)" />
       <param name="simulation" type="bool" value="$(eval arg('RUN_TYPE') == 'simulation')" />
+      <param name="motor_speeds/topic_wo_num" type="string" value="motor_speed/" />
 
       <remap if="$(eval arg('RUN_TYPE') == 'simulation')" from="~ground_truth_in" to="ground_truth" />
       <remap if="$(eval arg('RUN_TYPE') == 'realworld')" from="~rtk_in" to="rtk/bestpos" />
@@ -48,10 +49,12 @@
       <remap from="~mavros_rc_in" to="mavros/rc/in" />
       <remap from="~mavros_altitude_in" to="mavros/altitude" />
       <remap from="~mavros_battery_in" to="mavros/battery" />
+      <remap from="~mavros_esc_status_in" to="mavros/esc_status" />
       <remap from="~mavros_cmd_out" to="mavros/cmd/command" />
       <remap from="~mavros_set_mode_out" to="mavros/set_mode" />
       <remap from="~mavros_attitude_setpoint_out" to="mavros/setpoint_raw/attitude" />
       <remap from="~mavros_actuator_control_out" to="mavros/actuator_control" />
+      <remap from="~motor_speed_sync_out" to="motor_speeds_sync" />
 
     </node>
 

@@ -6,6 +6,8 @@
 
 #include <std_srvs/Trigger.h>
 
+#include <mrs_msgs/Float64ArrayStamped.h>
+
 #include <mrs_modules_msgs/Bestpos.h>
 
 #include <nav_msgs/Odometry.h>
@@ -29,6 +31,7 @@
 #include <mavros_msgs/RCIn.h>
 #include <mavros_msgs/Altitude.h>
 #include <mavros_msgs/ActuatorControl.h>
+#include <mavros_msgs/ESCStatus.h>
 
 //}
 
@@ -100,6 +103,10 @@ private:
   std::string _sim_rtk_utm_zone_;
   double      _sim_rtk_amsl_;
 
+  double      _motor_slowdown_constant_;
+  int         _num_motors_;
+  std::string _motor_speed_topic_wo_num_;
+
   // | --------------------- service clients -------------------- |
 
   mrs_lib::ServiceClientHandler<mavros_msgs::CommandLong> sch_mavros_command_long_;
@@ -146,10 +153,18 @@ private:
   mrs_lib::SubscribeHandler<sensor_msgs::BatteryState> sh_mavros_battery_;
   void                                                 callbackBattery(const sensor_msgs::BatteryState::ConstPtr msg);
 
+  std::vector<mrs_lib::SubscribeHandler<std_msgs::Float64>> sh_motor_speed_list_;
+  void                                                      callbackMotorSpeed(const std_msgs::Float64ConstPtr msg_in, const int motor_num);
+
+
+  mrs_lib::SubscribeHandler<mavros_msgs::ESCStatus> sh_esc_status_;
+  void                                              callbackESCStatus(const mavros_msgs::ESCStatusConstPtr msg_in);
+
   // | ----------------------- publishers ----------------------- |
 
-  mrs_lib::PublisherHandler<mavros_msgs::AttitudeTarget>  ph_mavros_attitude_target_;
-  mrs_lib::PublisherHandler<mavros_msgs::ActuatorControl> ph_mavros_actuator_control_;
+  mrs_lib::PublisherHandler<mavros_msgs::AttitudeTarget>   ph_mavros_attitude_target_;
+  mrs_lib::PublisherHandler<mavros_msgs::ActuatorControl>  ph_mavros_actuator_control_;
+  mrs_lib::PublisherHandler<mrs_msgs::Float64ArrayStamped> ph_motor_speeds_sync_;
 
   // | ------------------------ variables ----------------------- |
 
@@ -158,6 +173,9 @@ private:
   std::atomic<bool> armed_     = false;
   std::atomic<bool> connected_ = false;
   std::mutex        mutex_status_;
+
+  std::vector<std::pair<double, double>> motor_speeds_;
+  std::mutex                             mtx_motor_speeds_;
 };
 
 //}
@@ -192,6 +210,10 @@ void MrsUavPx4Api::initialize(const ros::NodeHandle& parent_nh, std::shared_ptr<
   param_loader.loadParam("simulated_rtk/utm_y", _sim_rtk_utm_y_);
   param_loader.loadParam("simulated_rtk/utm_zone", _sim_rtk_utm_zone_);
   param_loader.loadParam("simulated_rtk/amsl", _sim_rtk_amsl_);
+
+  param_loader.loadParam("motor_speeds/motor_slowdown_constant", _motor_slowdown_constant_);
+  param_loader.loadParam("motor_speeds/num_motors", _num_motors_);
+  param_loader.loadParam("motor_speeds/topic_wo_num", _motor_speed_topic_wo_num_);
 
   param_loader.loadParam("inputs/control_group", (bool&)_capabilities_.accepts_control_group_cmd);
   param_loader.loadParam("inputs/attitude_rate", (bool&)_capabilities_.accepts_attitude_rate_cmd);
@@ -264,10 +286,31 @@ void MrsUavPx4Api::initialize(const ros::NodeHandle& parent_nh, std::shared_ptr<
 
   sh_mavros_battery_ = mrs_lib::SubscribeHandler<sensor_msgs::BatteryState>(shopts, "mavros_battery_in", &MrsUavPx4Api::callbackBattery, this);
 
+  if (_simulation_) {
+    for (int i = 0; i < _num_motors_; i++) {
+
+      const std::string topic_abs = "/" + _uav_name_ + "/" + _motor_speed_topic_wo_num_ + std::to_string(i);
+
+      const std::function<void(std_msgs::Float64::ConstPtr)> cbk = std::bind(&MrsUavPx4Api::callbackMotorSpeed, this, std::placeholders::_1, i);
+
+      sh_motor_speed_list_.push_back(mrs_lib::SubscribeHandler<std_msgs::Float64>(shopts, topic_abs, cbk));
+    }
+  }
+
+  if (!_simulation_) {
+    sh_esc_status_ = mrs_lib::SubscribeHandler<mavros_msgs::ESCStatus>(shopts, "mavros_esc_status_in", &MrsUavPx4Api::callbackESCStatus, this);
+  }
+
+  for (int i = 0; i < _num_motors_; i++) {
+    motor_speeds_.push_back(std::make_pair(ros::Time::now().toSec(), 0.0));
+  }
+
+
   // | ----------------------- publishers ----------------------- |
 
   ph_mavros_attitude_target_  = mrs_lib::PublisherHandler<mavros_msgs::AttitudeTarget>(nh_, "mavros_attitude_setpoint_out", 1);
   ph_mavros_actuator_control_ = mrs_lib::PublisherHandler<mavros_msgs::ActuatorControl>(nh_, "mavros_actuator_control_out", 1);
+  ph_motor_speeds_sync_ = mrs_lib::PublisherHandler<mrs_msgs::Float64ArrayStamped>(nh_, "motor_speed_sync_out", 1);
 
   // | ----------------------- finish init ---------------------- |
 
@@ -753,7 +796,7 @@ void MrsUavPx4Api::callbackDistanceSensor(const sensor_msgs::Range::ConstPtr msg
     return;
   }
 
-  ROS_INFO_ONCE("[MrsUavPx4Api]: getting distnace sensor");
+  ROS_INFO_ONCE("[MrsUavPx4Api]: getting distance sensor");
 
   if (_capabilities_.produces_distance_sensor) {
 
@@ -1006,6 +1049,64 @@ void MrsUavPx4Api::callbackRTK(const mrs_modules_msgs::Bestpos::ConstPtr msg) {
 }
 
 //}
+
+/*//{ callbackMotorSpeed() */
+void MrsUavPx4Api::callbackMotorSpeed(const std_msgs::Float64ConstPtr msg_in, const int motor_num) {
+
+  if (!is_initialized_) {
+    return;
+  }
+
+  ROS_INFO_ONCE("[MrsUavPx4Api]: getting motor speeds");
+
+  std::scoped_lock lock(mtx_motor_speeds_);
+  // store motor speed in correct place of vector
+  motor_speeds_[motor_num] = std::make_pair(ros::Time::now().toSec(), _simulation_ ? msg_in->data * _motor_slowdown_constant_ : msg_in->data);
+
+  mrs_msgs::Float64ArrayStamped msg_out;
+  double                        t = 0.0;
+  for (int i = 0; i < _num_motors_; i++) {
+    t = motor_speeds_.at(i).first > t ? motor_speeds_.at(i).first : t;
+    msg_out.values.push_back(motor_speeds_.at(i).second);
+  }
+  msg_out.header.stamp = ros::Time(t);
+
+  ph_motor_speeds_sync_.publish(msg_out);
+  ROS_INFO_ONCE("[MrsUavPx4Api]: publishing synchronized motor speeds");
+}
+/*//}*/
+
+/*//{ callbackESCStatus() */
+void MrsUavPx4Api::callbackESCStatus(const mavros_msgs::ESCStatusConstPtr msg_in) {
+
+  if (!is_initialized_) {
+    return;
+  }
+
+  ROS_INFO_ONCE("[MrsUavPx4Api]: getting ESC Status");
+
+  if (msg_in->esc_status.size() < _num_motors_) {
+    return;
+  }
+
+  mrs_msgs::Float64ArrayStamped msg_out;
+  double                        t = 0;
+  for (size_t i = 0; i < msg_in->esc_status.size(); i++) {
+    t += msg_in->esc_status[i].header.stamp.toSec();
+    double rpm = msg_in->esc_status[i].rpm;
+
+    // sometimes the RPM value is not measured and reported as 0, which would produce biased acceleration
+    if (rpm == 0) {
+      return;
+    }
+    msg_out.values.push_back(rpm);
+  }
+  msg_out.header.stamp = ros::Time(t / _num_motors_);
+
+  ph_motor_speeds_sync_.publish(msg_out);
+  ROS_INFO_ONCE("[MrsUavPx4Api]: publishing synchronized motor speeds");
+}
+/*//}*/
 
 }  // namespace mrs_uav_px4_api
 

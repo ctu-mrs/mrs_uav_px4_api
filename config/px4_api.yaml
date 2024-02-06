@@ -8,6 +8,10 @@ simulated_rtk:
   utm_y: 5249465.43086
   amsl: 340.0
 
+motor_speeds:
+  num_motors: 4
+  motor_slowdown_constant: 0.0159236 # used only in simualation
+
 inputs:
   control_group: false
   attitude_rate: true
