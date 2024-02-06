@@ -955,14 +955,24 @@ void MrsUavPx4Api::callbackGroundTruth(const nav_msgs::Odometry::ConstPtr msg) {
 
     // if frame_id is "/world", "world", "/map" or "map" gazebo reports velocitites in global world frame so we need to transform them to body frame
     if (msg->header.frame_id == "/world" || msg->header.frame_id == "world" || msg->header.frame_id == "/map" || msg->header.frame_id == "map") {
+
       ROS_INFO_ONCE("[MrsUavPx4Api]: transforming Gazebo ground truth velocities from world to body frame");
+
       Eigen::Matrix3d R = mrs_lib::AttitudeConverter(msg->pose.pose.orientation);
+
       Eigen::Vector3d lin_vel_world(msg->twist.twist.linear.x, msg->twist.twist.linear.y, msg->twist.twist.linear.z);
       Eigen::Vector3d lin_vel_body = R.inverse() * lin_vel_world;
+
+      Eigen::Vector3d angular_vel_world(msg->twist.twist.angular.x, msg->twist.twist.angular.y, msg->twist.twist.angular.z);
+      Eigen::Vector3d angular_vel_body = R.inverse() * angular_vel_world;
 
       gt.twist.twist.linear.x = lin_vel_body[0];
       gt.twist.twist.linear.y = lin_vel_body[1];
       gt.twist.twist.linear.z = lin_vel_body[2];
+
+      gt.twist.twist.angular.x = angular_vel_body[0];
+      gt.twist.twist.angular.y = angular_vel_body[1];
+      gt.twist.twist.angular.z = angular_vel_body[2];
     }
 
     common_handlers_->publishers.publishGroundTruth(gt);
