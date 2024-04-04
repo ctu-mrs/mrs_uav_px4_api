@@ -29,6 +29,7 @@
 #include <mavros_msgs/RCIn.h>
 #include <mavros_msgs/Altitude.h>
 #include <mavros_msgs/ActuatorControl.h>
+#include <mavros_msgs/GPSRAW.h>
 
 //}
 
@@ -100,6 +101,13 @@ private:
   std::string _sim_rtk_utm_zone_;
   double      _sim_rtk_amsl_;
 
+  bool _px4_rtk_;
+  bool _altitude_from_px4_rtk_ = false;
+  double _altitude_px4_rtk_amsl_shift_ = 0;
+  double _last_amsl_altitude_ = 0;
+  double _last_rtk_altitude_ = 0;
+  uint8_t _last_rtk_fix_type_ =  mrs_msgs::RtkGps::_fix_type_type::NO_FIX;
+
   // | --------------------- service clients -------------------- |
 
   mrs_lib::ServiceClientHandler<mavros_msgs::CommandLong> sch_mavros_command_long_;
@@ -112,6 +120,8 @@ private:
 
   mrs_lib::SubscribeHandler<mrs_modules_msgs::Bestpos> sh_rtk_;
   void                                                 callbackRTK(const mrs_modules_msgs::Bestpos::ConstPtr msg);
+  mrs_lib::SubscribeHandler<mavros_msgs::GPSRAW> sh_rtk_px4_;
+  void                                                 callbackRTKPX4(const mavros_msgs::GPSRAW::ConstPtr msg);
 
   mrs_lib::SubscribeHandler<mavros_msgs::State> sh_mavros_state_;
 
@@ -187,6 +197,7 @@ void MrsUavPx4Api::initialize(const ros::NodeHandle& parent_nh, std::shared_ptr<
   param_loader.loadParam("mavros_timeout", _mavros_timeout_);
 
   param_loader.loadParam("simulation", _simulation_);
+  param_loader.loadParam("px4_rtk", _px4_rtk_);
 
   param_loader.loadParam("simulated_rtk/utm_x", _sim_rtk_utm_x_);
   param_loader.loadParam("simulated_rtk/utm_y", _sim_rtk_utm_y_);
@@ -242,6 +253,10 @@ void MrsUavPx4Api::initialize(const ros::NodeHandle& parent_nh, std::shared_ptr<
     sh_rtk_ = mrs_lib::SubscribeHandler<mrs_modules_msgs::Bestpos>(shopts, "rtk_in", &MrsUavPx4Api::callbackRTK, this);
   }
 
+  if (!_simulation_ and _px4_rtk_) {
+    sh_rtk_px4_ = mrs_lib::SubscribeHandler<mavros_msgs::GPSRAW>(shopts, "rtk_px4_in", &MrsUavPx4Api::callbackRTKPX4, this);
+  }
+
   sh_mavros_state_ = mrs_lib::SubscribeHandler<mavros_msgs::State>(shopts, "mavros_state_in", ros::Duration(0.05), &MrsUavPx4Api::timeoutMavrosState, this,
                                                                    &MrsUavPx4Api::callbackMavrosState, this);
 
@@ -260,7 +275,8 @@ void MrsUavPx4Api::initialize(const ros::NodeHandle& parent_nh, std::shared_ptr<
 
   sh_mavros_rc_ = mrs_lib::SubscribeHandler<mavros_msgs::RCIn>(shopts, "mavros_rc_in", &MrsUavPx4Api::callbackRC, this);
 
-  sh_mavros_altitude_ = mrs_lib::SubscribeHandler<mavros_msgs::Altitude>(shopts, "mavros_altitude_in", &MrsUavPx4Api::callbackAltitude, this);
+  sh_mavros_altitude_ = mrs_lib::SubscribeHandler<mavros_msgs::Altitude>(
+      shopts, "mavros_altitude_in", &MrsUavPx4Api::callbackAltitude, this);
 
   sh_mavros_battery_ = mrs_lib::SubscribeHandler<sensor_msgs::BatteryState>(shopts, "mavros_battery_in", &MrsUavPx4Api::callbackBattery, this);
 
@@ -860,15 +876,20 @@ void MrsUavPx4Api::callbackAltitude(const mavros_msgs::Altitude::ConstPtr msg) {
   }
 
   ROS_INFO_ONCE("[MrsUavPx4Api]: getting Altitude");
+  _last_amsl_altitude_ =  msg->amsl;
 
-  if (_capabilities_.produces_altitude) {
+  if (_altitude_from_px4_rtk_) {
+    ROS_INFO_THROTTLE(5, "[MrsUavPx4Api]: using px4 rtk altitude");
+  } else {
+    if (_capabilities_.produces_altitude) {
+      ROS_INFO_THROTTLE(5, "[MrsUavPx4Api]: using px4 amsl altitude");
+      mrs_msgs::HwApiAltitude altitude_out;
 
-    mrs_msgs::HwApiAltitude altitude_out;
+      altitude_out.stamp = msg->header.stamp;
+      altitude_out.amsl = msg->amsl - _altitude_px4_rtk_amsl_shift_;
 
-    altitude_out.stamp = msg->header.stamp;
-    altitude_out.amsl  = msg->amsl;
-
-    common_handlers_->publishers.publishAltitude(altitude_out);
+      common_handlers_->publishers.publishAltitude(altitude_out);
+    }
   }
 }
 
@@ -984,9 +1005,9 @@ void MrsUavPx4Api::callbackRTK(const mrs_modules_msgs::Bestpos::ConstPtr msg) {
 
   mrs_msgs::RtkGps rtk_msg_out;
 
-  rtk_msg_out.gps.latitude  = msg->latitude;
-  rtk_msg_out.gps.longitude = msg->longitude;
-  rtk_msg_out.gps.altitude  = msg->height;
+  rtk_msg_out.gps.latitude  = msg->latitude/10000000.0;
+  rtk_msg_out.gps.longitude = msg->longitude/10000000.0;
+  rtk_msg_out.gps.altitude  = msg->height/1000.0;
 
   rtk_msg_out.header.stamp    = ros::Time::now();
   rtk_msg_out.header.frame_id = _uav_name_ + "/" + _body_frame_name_;
@@ -1016,6 +1037,102 @@ void MrsUavPx4Api::callbackRTK(const mrs_modules_msgs::Bestpos::ConstPtr msg) {
 }
 
 //}
+
+/* callbackRTKPX4() //{ */
+
+void MrsUavPx4Api::callbackRTKPX4(const mavros_msgs::GPSRAW::ConstPtr msg) {
+  if (!is_initialized_) {
+    return;
+  }
+
+  ROS_INFO_ONCE("[MrsUavPx4Api]: getting rtk through px4");
+
+  mrs_msgs::RtkGps rtk_msg_out;
+
+  rtk_msg_out.gps.latitude  = msg->lat/10000000.0;
+  rtk_msg_out.gps.longitude = msg->lon/10000000.0;
+  rtk_msg_out.gps.altitude  = msg->alt/1000.0;
+
+  rtk_msg_out.header.stamp    = ros::Time::now();
+  rtk_msg_out.header.frame_id = _uav_name_ + "/" + _body_frame_name_;
+
+  if (msg->fix_type == mavros_msgs::GPSRAW::GPS_FIX_TYPE_RTK_FIXEDR) {
+    rtk_msg_out.status.status     = sensor_msgs::NavSatStatus::STATUS_GBAS_FIX;
+    rtk_msg_out.fix_type.fix_type = rtk_msg_out.fix_type.RTK_FIX;
+
+  } else if (msg->fix_type == mavros_msgs::GPSRAW::GPS_FIX_TYPE_RTK_FLOATR) {
+    rtk_msg_out.status.status     = sensor_msgs::NavSatStatus::STATUS_GBAS_FIX;
+    rtk_msg_out.fix_type.fix_type = rtk_msg_out.fix_type.RTK_FLOAT;
+
+  } else if (msg->fix_type == mavros_msgs::GPSRAW::GPS_FIX_TYPE_DGPS) {
+    rtk_msg_out.status.status     = sensor_msgs::NavSatStatus::STATUS_GBAS_FIX;
+    rtk_msg_out.fix_type.fix_type = rtk_msg_out.fix_type.DGPS;
+
+  } else if (msg->fix_type == mavros_msgs::GPSRAW::GPS_FIX_TYPE_2D_FIX or
+             msg->fix_type == mavros_msgs::GPSRAW::GPS_FIX_TYPE_3D_FIX) {
+    rtk_msg_out.status.status     = sensor_msgs::NavSatStatus::STATUS_GBAS_FIX;
+    rtk_msg_out.fix_type.fix_type = rtk_msg_out.fix_type.SPS;
+
+  } else if (msg->fix_type == mavros_msgs::GPSRAW::GPS_FIX_TYPE_NO_FIX) {
+    rtk_msg_out.status.status     = sensor_msgs::NavSatStatus::STATUS_NO_FIX;
+    rtk_msg_out.fix_type.fix_type = rtk_msg_out.fix_type.NO_FIX;
+  }
+
+  common_handlers_->publishers.publishRTK(rtk_msg_out);
+
+  if (!_altitude_from_px4_rtk_ and !offboard_ and
+      rtk_msg_out.fix_type.fix_type == rtk_msg_out.fix_type.RTK_FIX) {
+    // in case we have not rtk altitude and we are not offboard and we get fix
+    // we can switch altitude source with jump
+    ROS_WARN_STREAM("jump to the altitude to the rtk source"
+                    << _last_amsl_altitude_ << " last rtk alt "
+                    << _last_rtk_altitude_);
+    _altitude_from_px4_rtk_ = true;
+    _altitude_px4_rtk_amsl_shift_ = 0;
+  }
+
+  if (offboard_ and _last_rtk_fix_type_ != rtk_msg_out.fix_type.RTK_FIX and
+      rtk_msg_out.fix_type.fix_type == rtk_msg_out.fix_type.RTK_FIX) {
+    // we got fix, switching to rtk altitude
+    ROS_WARN_STREAM("we got fix!!! switching to rtk altitude"
+                    << _last_amsl_altitude_ << " last rtk alt "
+                    << _last_rtk_altitude_ << " shift "
+                    << _altitude_px4_rtk_amsl_shift_);
+    _altitude_px4_rtk_amsl_shift_ = _last_amsl_altitude_ - _last_rtk_altitude_;
+    _altitude_from_px4_rtk_ = true;
+  }
+
+
+  if (offboard_ and _last_rtk_fix_type_ == rtk_msg_out.fix_type.RTK_FIX and
+      rtk_msg_out.fix_type.fix_type != rtk_msg_out.fix_type.RTK_FIX) {
+    // we got fix, switching to rtk altitude
+    ROS_WARN_STREAM("we lost rtk fix!!! switching to amsl altitude, last amsl "
+                    << _last_amsl_altitude_ << " last rtk alt "
+                    << _last_rtk_altitude_ << " shift "
+                    << _altitude_px4_rtk_amsl_shift_);
+    _altitude_px4_rtk_amsl_shift_ = _last_amsl_altitude_ - _last_rtk_altitude_;
+    _altitude_from_px4_rtk_ = false;
+  }
+
+  if (_altitude_from_px4_rtk_) {
+    if (_capabilities_.produces_altitude) {
+
+      mrs_msgs::HwApiAltitude altitude_out;
+
+      altitude_out.stamp = msg->header.stamp;
+      altitude_out.amsl = msg->alt / 1000.0 + _altitude_px4_rtk_amsl_shift_;
+
+      common_handlers_->publishers.publishAltitude(altitude_out);
+    }
+  }
+
+ 
+  _last_rtk_altitude_  = msg->alt/1000.0;
+  _last_rtk_fix_type_  = rtk_msg_out.fix_type.fix_type;
+}
+
+//}
+
 
 }  // namespace mrs_uav_px4_api
 

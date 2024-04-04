@@ -8,6 +8,8 @@ simulated_rtk:
   utm_y: 5249465.43086
   amsl: 340.0
 
+px4_rtk: true
+
 inputs:
   control_group: false
   attitude_rate: true

@@ -38,6 +38,7 @@
 
       <remap if="$(eval arg('RUN_TYPE') == 'simulation')" from="~ground_truth_in" to="ground_truth" />
       <remap if="$(eval arg('RUN_TYPE') == 'realworld')" from="~rtk_in" to="rtk/bestpos" />
+      <remap if="$(eval arg('RUN_TYPE') == 'realworld')" from="~rtk_px4_in" to="mavros/gpsstatus/gps1/raw" />
       <remap from="~mavros_state_in" to="mavros/state" />
       <remap if="$(eval arg('OLD_PX4_FW') == 0)" from="~mavros_local_position_in" to="mavros/odometry/in" />
       <remap if="$(eval arg('OLD_PX4_FW') == 1)" from="~mavros_local_position_in" to="mavros/local_position/odom" />
