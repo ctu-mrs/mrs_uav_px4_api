@@ -480,6 +480,15 @@ std::tuple<bool, std::string> MrsUavPx4Api::callbackArming([[maybe_unused]] cons
 
   mavros_msgs::CommandLong srv_out;
 
+  // when REALWORLD AND ARM:=TRUE
+  if (!_simulation_ && request) {
+
+    ss << "can not arm by service when not in simulation! You should arm the drone by the RC controller only!";
+    ROS_ERROR_STREAM_THROTTLE(1.0, "[Px4Api]: " << ss.str());
+
+    return {srv_out.response.success, ss.str()};
+  }
+
   srv_out.request.broadcast    = false;
   srv_out.request.command      = 400;  // the code for arming
   srv_out.request.confirmation = true;
