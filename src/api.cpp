@@ -29,6 +29,7 @@
 #include <mavros_msgs/RCIn.h>
 #include <mavros_msgs/Altitude.h>
 #include <mavros_msgs/ActuatorControl.h>
+#include <mavros_msgs/GPSRAW.h>
 
 //}
 
@@ -143,6 +144,9 @@ private:
   mrs_lib::SubscribeHandler<mavros_msgs::Altitude> sh_mavros_altitude_;
   void                                             callbackAltitude(const mavros_msgs::Altitude::ConstPtr msg);
 
+  mrs_lib::SubscribeHandler<mavros_msgs::GPSRAW> sh_gps_status_raw_;
+  void                                           callbackGpsStatusRaw(const mavros_msgs::GPSRAW::ConstPtr msg);
+
   mrs_lib::SubscribeHandler<sensor_msgs::BatteryState> sh_mavros_battery_;
   void                                                 callbackBattery(const sensor_msgs::BatteryState::ConstPtr msg);
 
@@ -199,6 +203,7 @@ void MrsUavPx4Api::initialize(const ros::NodeHandle& parent_nh, std::shared_ptr<
 
   param_loader.loadParam("outputs/distance_sensor", (bool&)_capabilities_.produces_distance_sensor);
   param_loader.loadParam("outputs/gnss", (bool&)_capabilities_.produces_gnss);
+  param_loader.loadParam("outputs/gnss_status", (bool&)_capabilities_.produces_gnss_status);
   param_loader.loadParam("outputs/rtk", (bool&)_capabilities_.produces_rtk);
   param_loader.loadParam("outputs/ground_truth", (bool&)_capabilities_.produces_ground_truth);
   param_loader.loadParam("outputs/imu", (bool&)_capabilities_.produces_imu);
@@ -261,6 +266,8 @@ void MrsUavPx4Api::initialize(const ros::NodeHandle& parent_nh, std::shared_ptr<
   sh_mavros_rc_ = mrs_lib::SubscribeHandler<mavros_msgs::RCIn>(shopts, "mavros_rc_in", &MrsUavPx4Api::callbackRC, this);
 
   sh_mavros_altitude_ = mrs_lib::SubscribeHandler<mavros_msgs::Altitude>(shopts, "mavros_altitude_in", &MrsUavPx4Api::callbackAltitude, this);
+
+  sh_gps_status_raw_ = mrs_lib::SubscribeHandler<mavros_msgs::GPSRAW>(shopts, "mavros_gps_status_raw_in", &MrsUavPx4Api::callbackGpsStatusRaw, this);
 
   sh_mavros_battery_ = mrs_lib::SubscribeHandler<sensor_msgs::BatteryState>(shopts, "mavros_battery_in", &MrsUavPx4Api::callbackBattery, this);
 
@@ -869,6 +876,47 @@ void MrsUavPx4Api::callbackAltitude(const mavros_msgs::Altitude::ConstPtr msg) {
     altitude_out.amsl  = msg->amsl;
 
     common_handlers_->publishers.publishAltitude(altitude_out);
+  }
+}
+
+//}
+
+/* callbackAltitude() //{ */
+
+void MrsUavPx4Api::callbackGpsStatusRaw(const mavros_msgs::GPSRAW::ConstPtr msg) {
+
+  if (!is_initialized_) {
+    return;
+  }
+
+  ROS_INFO_ONCE("[MrsUavPx4Api]: getting Gps Status Raw");
+
+  if (_capabilities_.produces_gnss_status) {
+
+    mrs_msgs::GpsInfo gps_info_out;
+
+    gps_info_out.fix_type = msg->fix_type;  // [GPS_FIX_TYPE] GPS fix type
+
+    gps_info_out.lat                = double(msg->lat) / 10000000;  // [deg] Latitude (WGS84, EGM96 ellipsoid)
+    gps_info_out.lon                = double(msg->lon) / 10000000;  // [deg] Longitude (WGS84, EGM96 ellipsoid)
+    gps_info_out.alt                = float(msg->alt) / 1000;       // [m]  (MSL). Positive for up. Not WGS84 altitude.
+    gps_info_out.eph                = msg->eph;                     // GPS HDOP horizontal dilution of position (unitless). If unknown, set to: UINT16_MAX
+    gps_info_out.epv                = msg->epv;                     // GPS VDOP vertical dilution of position (unitless). If unknown, set to: UINT16_MAX
+    gps_info_out.vel                = float(msg->vel) / 100;        // [m/s] GPS ground speed. If unknown, set to: UINT16_MAX
+    gps_info_out.cog                = float(msg->cog) / 100;        // [deg] Course over ground (NOT heading, but direction of movement), 0.0..359.99 degrees.
+    gps_info_out.satellites_visible = msg->satellites_visible;      // Number of satellites visible. If unknown, set to 255
+
+    gps_info_out.alt_ellipsoid = float(msg->alt_ellipsoid) / 1000;  // [m] Altitude (above WGS84, EGM96 ellipsoid). Positive for up.
+    gps_info_out.h_acc         = float(msg->h_acc) / 1000;          // [m] Position uncertainty. Positive for up.
+    gps_info_out.v_acc         = float(msg->v_acc) / 1000;          // [m] Altitude uncertainty. Positive for up.
+    gps_info_out.vel_acc       = float(msg->vel_acc) / 1000;        // [m/s] Speed uncertainty. Positive for up.
+    gps_info_out.hdg_acc       = float(msg->hdg_acc) / 1000;        // [deg] Heading / track uncertainty
+    gps_info_out.yaw           = float(msg->yaw) / 100;             // [deg] Yaw in earth frame from north.
+    gps_info_out.dgps_num_sats = msg->dgps_numch;                   // Number of DGPS satellites
+    gps_info_out.dgps_age      = float(msg->dgps_age) / 1000;       // [s] Age of DGPS info
+    gps_info_out.baseline_dist = 0;                                 // [m] distance to the basestation, not supported by the GPSRAW message
+
+    common_handlers_->publishers.publishGNSSStatus(gps_info_out);
   }
 }
 

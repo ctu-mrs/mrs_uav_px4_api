@@ -16,6 +16,7 @@ inputs:
 outputs:
   distance_sensor:      true
   gnss:                 true
+  gnss_status:          true
   rtk:                  true
   imu:                  true
   altitude:             true
