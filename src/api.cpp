@@ -895,6 +895,7 @@ void MrsUavPx4Api::callbackGpsStatusRaw(const mavros_msgs::GPSRAW::ConstPtr msg)
 
     mrs_msgs::GpsInfo gps_info_out;
 
+    gps_info_out.stamp = msg->header.stamp;  // [GPS_FIX_TYPE] GPS fix type
     gps_info_out.fix_type = msg->fix_type;  // [GPS_FIX_TYPE] GPS fix type
 
     gps_info_out.lat                = double(msg->lat) / 10000000;  // [deg] Latitude (WGS84, EGM96 ellipsoid)
