@@ -18,6 +18,8 @@
 #include <mrs_lib/service_client_handler.h>
 #include <mrs_lib/gps_conversions.h>
 
+#include <mrs_errorgraph/error_publisher.h>
+
 #include <std_msgs/Float64.h>
 
 #include <geometry_msgs/QuaternionStamped.h>
@@ -81,6 +83,13 @@ public:
 
 private:
   bool is_initialized_ = false;
+
+  // | ----------------------- errorgraph ----------------------- |
+  enum class error_type_t : uint16_t
+  {
+    not_receiving_mavros_state,
+  };
+  std::unique_ptr<mrs_errorgraph::ErrorPublisher> error_publisher_;
 
   std::shared_ptr<mrs_uav_hw_api::CommonHandlers_t> common_handlers_;
 
@@ -176,6 +185,8 @@ void MrsUavPx4Api::initialize(const ros::NodeHandle& parent_nh, std::shared_ptr<
 
   ros::NodeHandle nh_(parent_nh);
 
+  error_publisher_ = std::make_unique<mrs_errorgraph::ErrorPublisher>(nh_, "HwApiManager", "Px4Api");
+
   common_handlers_ = common_handlers;
 
   _uav_name_         = common_handlers->getUavName();
@@ -220,7 +231,8 @@ void MrsUavPx4Api::initialize(const ros::NodeHandle& parent_nh, std::shared_ptr<
 
   if (!param_loader.loadedSuccessfully()) {
     ROS_ERROR("[MrsUavPx4Api]: Could not load all parameters!");
-    ros::shutdown();
+    error_publisher_->addOneshotError("Could not load all parameters.");
+    error_publisher_->flushAndShutdown();
   }
 
   // | --------------------- service clients -------------------- |
@@ -609,6 +621,7 @@ void MrsUavPx4Api::timeoutMavrosState([[maybe_unused]] const std::string& topic,
     ROS_WARN_THROTTLE(1.0, "[MrsUavPx4Api]: The Mavros state should be supplied at 100 Hz to provided fast refresh rate on the state of the OFFBOARD mode.");
     ROS_WARN_THROTTLE(1.0, "[MrsUavPx4Api]: If missing, the UAV could be disarmed by safety routines while not knowing it has switched to the MANUAL mode.");
   }
+  error_publisher_->addGeneralError(error_type_t::not_receiving_mavros_state, "Not receiving Mavros state.");
 }
 
 //}
