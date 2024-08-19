@@ -7,6 +7,7 @@ set(CATKIN_DEPENDENCIES
   mavros
   mavros_msgs
   mrs_lib
+  mrs_errorgraph
   mrs_msgs
   mrs_modules_msgs
   mrs_uav_hw_api
