@@ -59,6 +59,8 @@
       <remap from="~mavros_actuator_control_out" to="mavros/actuator_control" />
       <remap from="~mavros_gps_status_raw_in" to="mavros/gpsstatus/gps1/raw" />
 
+      <remap from="~errors" to="errors" />
+
     </node>
 
   </group>
