@@ -21,6 +21,10 @@
   <arg     if="$(arg debug)" name="launch_prefix" value="debug_roslaunch" />
   <arg unless="$(arg debug)" name="launch_prefix" value="" />
 
+  <group if="$(eval arg('RUN_TYPE') == 'realworld')">
+    <include file="$(find mrs_uav_px4_api)/launch/mavros_realworld.launch" />
+  </group>
+
   <group ns="$(arg UAV_NAME)">
 
     <node pkg="nodelet" type="nodelet" name="hw_api" args="$(arg nodelet) mrs_uav_hw_api/HwApiManager $(arg nodelet_manager)" output="screen" launch-prefix="$(arg launch_prefix)">
