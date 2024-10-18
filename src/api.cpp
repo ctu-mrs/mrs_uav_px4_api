@@ -21,6 +21,7 @@
 #include <mrs_errorgraph/error_publisher.h>
 
 #include <std_msgs/Float64.h>
+#include <std_srvs/SetBool.h>
 
 #include <geometry_msgs/QuaternionStamped.h>
 
@@ -88,6 +89,11 @@ private:
   enum class error_type_t : uint16_t
   {
     not_receiving_mavros_state,
+    not_receiving_ground_truth,
+    not_receiving_rtk,
+    not_receiving_gps,
+    not_receiving_distance_sensor,
+    not_receiving_imu,
   };
   std::unique_ptr<mrs_errorgraph::ErrorPublisher> error_publisher_;
 
@@ -101,7 +107,8 @@ private:
   std::string _body_frame_name_;
   std::string _world_frame_name_;
 
-  double _mavros_timeout_;
+  ros::Duration _mavros_timeout_;
+  ros::Duration _general_topic_timeout_;
 
   bool _simulation_;
 
@@ -110,10 +117,19 @@ private:
   std::string _sim_rtk_utm_zone_;
   double      _sim_rtk_amsl_;
 
+  // | ------------------------- timers ------------------------- |
+
+  ros::Timer tim_topic_check_;
+
   // | --------------------- service clients -------------------- |
 
   mrs_lib::ServiceClientHandler<mavros_msgs::CommandLong> sch_mavros_command_long_;
   mrs_lib::ServiceClientHandler<mavros_msgs::SetMode>     sch_mavros_mode_;
+
+  // | -------------------------- service servers -------------------------- |
+  ros::ServiceServer svr_ignore_ground_truth_;
+
+  bool callbackIgnoreGroundTruth(std_srvs::SetBool::Request& req, std_srvs::SetBool::Response& resp);
 
   // | ----------------------- subscribers ---------------------- |
 
@@ -126,6 +142,7 @@ private:
   mrs_lib::SubscribeHandler<mavros_msgs::State> sh_mavros_state_;
 
   void   timeoutMavrosState(const std::string& topic, const ros::Time& last_msg);
+  void timeoutGeneralTopic(const std::string& topic, const ros::Time& last_msg, const error_type_t error_type, const std::string& error_description);
   double RCChannelToRange(const double& rc_value);
   void   callbackMavrosState(const mavros_msgs::State::ConstPtr msg);
 
@@ -166,11 +183,21 @@ private:
 
   // | ------------------------ variables ----------------------- |
 
+  ros::NodeHandle nh_;
   std::atomic<bool> offboard_ = false;
   std::string       mode_;
   std::atomic<bool> armed_     = false;
   std::atomic<bool> connected_ = false;
   std::mutex        mutex_status_;
+
+  template <class Shandler_T, typename CbkMsg_T, typename CbkTim_T>
+  static void init_shandler(MrsUavPx4Api* this_ptr, Shandler_T& shandler, const mrs_lib::SubscribeHandlerOptions& shopts, const std::string& topic, CbkMsg_T cbk_msg, CbkTim_T cbk_tim, error_type_t error_type, const std::string& error_msg)
+  {
+    const typename Shandler_T::message_callback_t msg_cbk = std::bind(cbk_msg, this_ptr, std::placeholders::_1);
+    const typename Shandler_T::timeout_callback_t timeout_cbk = std::bind(cbk_tim, this_ptr, std::placeholders::_1, std::placeholders::_2, error_type, error_msg);
+    shandler = Shandler_T(shopts, topic, timeout_cbk, msg_cbk);
+  }
+
 };
 
 //}
@@ -183,7 +210,7 @@ private:
 
 void MrsUavPx4Api::initialize(const ros::NodeHandle& parent_nh, std::shared_ptr<mrs_uav_hw_api::CommonHandlers_t> common_handlers) {
 
-  ros::NodeHandle nh_(parent_nh);
+  nh_ = ros::NodeHandle(parent_nh);
 
   error_publisher_ = std::make_unique<mrs_errorgraph::ErrorPublisher>(nh_, "HwApiManager", "Px4Api");
 
@@ -240,23 +267,27 @@ void MrsUavPx4Api::initialize(const ros::NodeHandle& parent_nh, std::shared_ptr<
   sch_mavros_command_long_ = mrs_lib::ServiceClientHandler<mavros_msgs::CommandLong>(nh_, "mavros_cmd_out");
   sch_mavros_mode_         = mrs_lib::ServiceClientHandler<mavros_msgs::SetMode>(nh_, "mavros_set_mode_out");
 
+  // | --------------------- service servers -------------------- |
+  if (_simulation_)
+    svr_ignore_ground_truth_ = nh_.advertiseService("ignore_ground_truth", &MrsUavPx4Api::callbackIgnoreGroundTruth, this);
+
   // | ----------------------- subscribers ---------------------- |
 
   mrs_lib::SubscribeHandlerOptions shopts;
   shopts.nh                 = nh_;
   shopts.node_name          = "MrsHwPx4Api";
-  shopts.no_message_timeout = mrs_lib::no_timeout;
+  shopts.no_message_timeout = ros::Duration(1.0);
   shopts.threadsafe         = true;
   shopts.autostart          = true;
   shopts.queue_size         = 10;
   shopts.transport_hints    = ros::TransportHints().tcpNoDelay();
 
   if (_simulation_) {
-    sh_ground_truth_ = mrs_lib::SubscribeHandler<nav_msgs::Odometry>(shopts, "ground_truth_in", &MrsUavPx4Api::callbackGroundTruth, this);
+    init_shandler(this, sh_ground_truth_, shopts, "ground_truth_in", &MrsUavPx4Api::callbackGroundTruth, &MrsUavPx4Api::timeoutGeneralTopic, error_type_t::not_receiving_ground_truth, "Not receiving ground truth.");
   }
 
   if (!_simulation_) {
-    sh_rtk_ = mrs_lib::SubscribeHandler<mrs_modules_msgs::Bestpos>(shopts, "rtk_in", &MrsUavPx4Api::callbackRTK, this);
+    init_shandler(this, sh_rtk_, shopts, "rtk_in", &MrsUavPx4Api::callbackRTK, &MrsUavPx4Api::timeoutGeneralTopic, error_type_t::not_receiving_rtk, "Not receiving RTK.");
   }
 
   sh_mavros_state_ = mrs_lib::SubscribeHandler<mavros_msgs::State>(shopts, "mavros_state_in", ros::Duration(0.05), &MrsUavPx4Api::timeoutMavrosState, this,
@@ -264,22 +295,26 @@ void MrsUavPx4Api::initialize(const ros::NodeHandle& parent_nh, std::shared_ptr<
 
   sh_mavros_odometry_local_ = mrs_lib::SubscribeHandler<nav_msgs::Odometry>(shopts, "mavros_local_position_in", &MrsUavPx4Api::callbackOdometryLocal, this);
 
-  sh_mavros_gps_ = mrs_lib::SubscribeHandler<sensor_msgs::NavSatFix>(shopts, "mavros_global_position_in", &MrsUavPx4Api::callbackNavsatFix, this);
+  init_shandler(this, sh_mavros_gps_, shopts, "mavros_global_position_in", &MrsUavPx4Api::callbackNavsatFix, &MrsUavPx4Api::timeoutGeneralTopic, error_type_t::not_receiving_gps, "Not receiving GPS.");
 
-  sh_mavros_distance_sensor_ = mrs_lib::SubscribeHandler<sensor_msgs::Range>(shopts, "mavros_garmin_in", &MrsUavPx4Api::callbackDistanceSensor, this);
+  init_shandler(this, sh_mavros_distance_sensor_, shopts, "mavros_garmin_in", &MrsUavPx4Api::callbackDistanceSensor, &MrsUavPx4Api::timeoutGeneralTopic, error_type_t::not_receiving_distance_sensor, "Not receiving distance sensor.");
 
-  sh_mavros_imu_ = mrs_lib::SubscribeHandler<sensor_msgs::Imu>(shopts, "mavros_imu_in", &MrsUavPx4Api::callbackImu, this);
+  init_shandler(this, sh_mavros_imu_, shopts, "mavros_imu_in", &MrsUavPx4Api::callbackImu, &MrsUavPx4Api::timeoutGeneralTopic, error_type_t::not_receiving_imu, "Not receiving IMU.");
 
   sh_mavros_magnetometer_heading_ = mrs_lib::SubscribeHandler<std_msgs::Float64>(shopts, "mavros_magnetometer_in", &MrsUavPx4Api::callbackMagnetometer, this);
 
   sh_mavros_magnetic_field_ =
       mrs_lib::SubscribeHandler<sensor_msgs::MagneticField>(shopts, "mavros_magnetic_field_in", &MrsUavPx4Api::callbackMagneticField, this);
 
-  sh_mavros_rc_ = mrs_lib::SubscribeHandler<mavros_msgs::RCIn>(shopts, "mavros_rc_in", &MrsUavPx4Api::callbackRC, this);
-
   sh_mavros_altitude_ = mrs_lib::SubscribeHandler<mavros_msgs::Altitude>(shopts, "mavros_altitude_in", &MrsUavPx4Api::callbackAltitude, this);
 
   sh_gps_status_raw_ = mrs_lib::SubscribeHandler<mavros_msgs::GPSRAW>(shopts, "mavros_gps_status_raw_in", &MrsUavPx4Api::callbackGpsStatusRaw, this);
+
+  // in simulation, ignore the timeout of these two topics
+  if (_simulation_)
+    shopts.no_message_timeout = mrs_lib::no_timeout;
+
+  sh_mavros_rc_ = mrs_lib::SubscribeHandler<mavros_msgs::RCIn>(shopts, "mavros_rc_in", &MrsUavPx4Api::callbackRC, this);
 
   sh_mavros_battery_ = mrs_lib::SubscribeHandler<sensor_msgs::BatteryState>(shopts, "mavros_battery_in", &MrsUavPx4Api::callbackBattery, this);
 
@@ -599,9 +634,9 @@ void MrsUavPx4Api::timeoutMavrosState([[maybe_unused]] const std::string& topic,
     return;
   }
 
-  ros::Duration time = ros::Time::now() - last_msg;
+  const ros::Duration delay = ros::Time::now() - last_msg;
 
-  if (time.toSec() > _mavros_timeout_) {
+  if (delay > _mavros_timeout_) {
 
     {
       std::scoped_lock lock(mutex_status_);
@@ -612,16 +647,29 @@ void MrsUavPx4Api::timeoutMavrosState([[maybe_unused]] const std::string& topic,
       mode_      = "";
     }
 
-    ROS_WARN_THROTTLE(1.0, "[MrsUavPx4Api]: Have not received Mavros state for more than '%.3f s'", time.toSec());
+    ROS_WARN_THROTTLE(1.0, "[MrsUavPx4Api]: Have not received Mavros state for more than '%.3f s'", delay.toSec());
 
   } else {
 
-    ROS_WARN_THROTTLE(1.0, "[MrsUavPx4Api]: Not recieving Mavros state message for '%.3f s'! Setup the PixHawk SD card!!", time.toSec());
+    ROS_WARN_THROTTLE(1.0, "[MrsUavPx4Api]: Not recieving Mavros state message for '%.3f s'! Setup the PixHawk SD card!!", delay.toSec());
     ROS_WARN_THROTTLE(1.0, "[MrsUavPx4Api]: This could be also caused by the not being PixHawk booted properly due to, e.g., antispark connector jerkyness.");
     ROS_WARN_THROTTLE(1.0, "[MrsUavPx4Api]: The Mavros state should be supplied at 100 Hz to provided fast refresh rate on the state of the OFFBOARD mode.");
     ROS_WARN_THROTTLE(1.0, "[MrsUavPx4Api]: If missing, the UAV could be disarmed by safety routines while not knowing it has switched to the MANUAL mode.");
   }
   error_publisher_->addGeneralError(error_type_t::not_receiving_mavros_state, "Not receiving Mavros state.");
+}
+
+//}
+
+/* timeoutGeneralTopic() //{ */
+
+void MrsUavPx4Api::timeoutGeneralTopic(const std::string& topic, const ros::Time& last_msg, const error_type_t error_type, const std::string& error_description) {
+
+  const ros::Duration delay = ros::Time::now() - last_msg;
+
+  ROS_WARN_STREAM_THROTTLE(1.0, "[MrsUavPx4Api]: Have not received any message on topic \"" << topic << "\" for more than " << delay << "s");
+
+  error_publisher_->addGeneralError(error_type, error_description);
 }
 
 //}
@@ -973,8 +1021,6 @@ void MrsUavPx4Api::callbackGroundTruth(const nav_msgs::Odometry::ConstPtr msg) {
 
   ROS_INFO_ONCE("[MrsUavPx4Api]: getting ground truth");
 
-  auto odom = msg;
-
   // | ------------------ publish ground truth ------------------ |
 
   if (_capabilities_.produces_ground_truth) {
@@ -1087,6 +1133,31 @@ void MrsUavPx4Api::callbackRTK(const mrs_modules_msgs::Bestpos::ConstPtr msg) {
 }
 
 //}
+
+bool MrsUavPx4Api::callbackIgnoreGroundTruth(std_srvs::SetBool::Request& req, std_srvs::SetBool::Response& resp)
+{
+  mrs_lib::SubscribeHandlerOptions shopts;
+  shopts.nh                 = nh_;
+  shopts.node_name          = "MrsHwPx4Api";
+  shopts.no_message_timeout = ros::Duration(1.0);
+  shopts.threadsafe         = true;
+  shopts.autostart          = true;
+  shopts.queue_size         = 10;
+  shopts.transport_hints    = ros::TransportHints().tcpNoDelay();
+
+  if (req.data)
+  {
+    resp.message = "Stopping subscriber of ground_truth.";
+    init_shandler(this, sh_ground_truth_, shopts, "ground_truth_ignored", &MrsUavPx4Api::callbackGroundTruth, &MrsUavPx4Api::timeoutGeneralTopic, error_type_t::not_receiving_ground_truth, "Not receiving ground truth.");
+  }
+  else
+  {
+    resp.message = "Starting subscriber of ground_truth.";
+    init_shandler(this, sh_ground_truth_, shopts, "ground_truth_in", &MrsUavPx4Api::callbackGroundTruth, &MrsUavPx4Api::timeoutGeneralTopic, error_type_t::not_receiving_ground_truth, "Not receiving ground truth.");
+  }
+  resp.success = true;
+  return true;
+}
 
 }  // namespace mrs_uav_px4_api
 
