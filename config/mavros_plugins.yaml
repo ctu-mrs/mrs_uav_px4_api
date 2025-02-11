@@ -30,7 +30,7 @@ plugin_blacklist:
 - mocap_pose_estimate
 - cam_imu_sync
 - fake_gps
-- gps_rtk
+# - gps_rtk
 - obstacle_distance
 - servo_state_publisher
 - companion_process_status
