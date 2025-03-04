@@ -692,12 +692,12 @@ void MrsUavPx4Api::callbackOdometryLocal(const nav_msgs::Odometry::ConstPtr msg)
 
   // | -------------------- publish position -------------------- |
 
+  double lat, lon, correct_x, correct_y;
+
   if (_capabilities_.produces_position) {
 
     // The px4 Azimuthal Equidistant Projection of WGS84 is inconsistent with the UTM conversion is MRS system,
     // therefore, we convert it back to WGS84 frame and then convert correctly using mrs_lib.
-
-    double lat, lon, correct_x, correct_y;
 
     // BEGIN PX4 CODE
     //void MapProjection::reproject(float x, float y, double &lat, double &lon) const
@@ -784,7 +784,16 @@ void MrsUavPx4Api::callbackOdometryLocal(const nav_msgs::Odometry::ConstPtr msg)
   // | -------------------- publish odometry -------------------- |
 
   if (_capabilities_.produces_odometry) {
-    common_handlers_->publishers.publishOdometry(*odom);
+    if (_capabilities_.produces_position) {
+      auto odom_new = *odom;
+      odom_new.pose.pose.position.x = correct_x;
+      odom_new.pose.pose.position.y = correct_y;
+      common_handlers_->publishers.publishOdometry(odom_new);
+    }
+    else
+    {
+      common_handlers_->publishers.publishOdometry(*odom);
+    }
   }
 }
 
