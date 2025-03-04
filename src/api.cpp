@@ -101,6 +101,14 @@ private:
   std::string _sim_rtk_utm_zone_;
   double      _sim_rtk_amsl_;
 
+  double _ref_sin_lat;
+  double _ref_cos_lat;
+  double _ref_lat;
+  double _ref_lon;
+  double _ref_utm_x;
+  double _ref_utm_y;
+  bool _ref_latlon_init = false;
+
   // | --------------------- service clients -------------------- |
 
   mrs_lib::ServiceClientHandler<mavros_msgs::CommandLong> sch_mavros_command_long_;
@@ -674,7 +682,7 @@ void MrsUavPx4Api::callbackMavrosState(const mavros_msgs::State::ConstPtr msg) {
 
 void MrsUavPx4Api::callbackOdometryLocal(const nav_msgs::Odometry::ConstPtr msg) {
 
-  if (!is_initialized_) {
+  if (!is_initialized_ or !_ref_latlon_init) {
     return;
   }
 
@@ -686,11 +694,50 @@ void MrsUavPx4Api::callbackOdometryLocal(const nav_msgs::Odometry::ConstPtr msg)
 
   if (_capabilities_.produces_position) {
 
+    // The px4 Azimuthal Equidistant Projection of WGS84 is inconsistent with the UTM conversion is MRS system,
+    // therefore, we convert it back to WGS84 frame and then convert correctly using mrs_lib.
+
+    double lat, lon, correct_x, correct_y;
+
+    // BEGIN PX4 CODE
+    //void MapProjection::reproject(float x, float y, double &lat, double &lon) const
+    // {
+    const double x_rad = (double)odom->pose.pose.position.y / 6371000.0;
+    const double y_rad = (double)odom->pose.pose.position.x / 6371000.0;
+    const double c = sqrt(x_rad * x_rad + y_rad * y_rad);
+
+    if (fabs(c) > 0) {
+      const double sin_c = sin(c);
+      const double cos_c = cos(c);
+
+      const double lat_rad = asin(cos_c * _ref_sin_lat + (x_rad * sin_c * _ref_cos_lat) / c);
+      const double lon_rad = (_ref_lon + atan2(y_rad * sin_c, c * _ref_cos_lat * cos_c - x_rad * _ref_sin_lat * sin_c));
+
+      lat = RAD2DEG(lat_rad);
+      lon = RAD2DEG(lon_rad);
+
+    } else {
+      lat = RAD2DEG(_ref_lat);
+      lon = RAD2DEG(_ref_lon);
+    }
+  // }
+  // END PX4 CODE
+
+    mrs_lib::UTM(lat, lon, &correct_x, &correct_y);
+    correct_x = correct_x - _ref_utm_x;
+    correct_y = correct_y - _ref_utm_y;
+
     geometry_msgs::PointStamped position;
 
     position.header.stamp    = odom->header.stamp;
     position.header.frame_id = _uav_name_ + "/" + _world_frame_name_;
     position.point           = odom->pose.pose.position;
+
+//    ROS_DEBUG("[MrsUavPx4Api]: position_px4_x: %f, position_px4_y: %f", position.point.x, position.point.y);
+//    ROS_DEBUG("[MrsUavPx4Api]: correct_mrs_x: %f, correct_mrs_y: %f", correct_x, correct_y);
+
+    position.point.x         = correct_x;
+    position.point.y         = correct_y;
 
     common_handlers_->publishers.publishPosition(position);
   }
@@ -756,6 +803,17 @@ void MrsUavPx4Api::callbackNavsatFix(const sensor_msgs::NavSatFix::ConstPtr msg)
   if (_capabilities_.produces_gnss) {
 
     common_handlers_->publishers.publishGNSS(*msg);
+
+    if (!_ref_latlon_init) {
+
+      _ref_lat     = DEG2RAD(msg->latitude);
+      _ref_lon     = DEG2RAD(msg->longitude);
+      _ref_sin_lat = sin(_ref_lat);
+      _ref_cos_lat = cos(_ref_lat);
+      mrs_lib::UTM(msg->latitude, msg->longitude, &_ref_utm_x, &_ref_utm_y);
+      _ref_latlon_init = true;
+    }
+
   }
 }
 
