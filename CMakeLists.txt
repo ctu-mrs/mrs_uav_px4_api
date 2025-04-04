@@ -59,6 +59,7 @@ endforeach()
 include_directories(
   ${rclcpp_INCLUDE_DIRS}
   ${mrs_lib_INCLUDE_DIRS}
+  ${mrs_uav_hw_api_INCLUDE_DIRS}
 )
 
 # Plugin
@@ -71,8 +72,6 @@ ament_target_dependencies(MrsUavPx4Api_Api
   ${DEPENDENCIES}
 )
 
-rclcpp_components_register_nodes(MrsUavPx4Api_Api PLUGIN "mrs_uav_px4_api::Api" EXECUTABLE MrsUavPx4Api_Api)
-
 target_compile_definitions(MrsUavPx4Api_Api PRIVATE USE_ROS_TIMER=${USE_ROS_TIMER})
 
 ## --------------------------------------------------------------
@@ -80,7 +79,7 @@ target_compile_definitions(MrsUavPx4Api_Api PRIVATE USE_ROS_TIMER=${USE_ROS_TIME
 ## --------------------------------------------------------------
 
 # <package of the base class>, <relative path to the xml>
-pluginlib_export_plugin_description_file(mrs_uav_px4_api plugins.xml)
+pluginlib_export_plugin_description_file(mrs_uav_hw_api plugins.xml)
 
 ## --------------------------------------------------------------
 ## |                           install                          |
@@ -106,6 +105,10 @@ install(
 install(
   DIRECTORY config
   DESTINATION share/${PROJECT_NAME}
+)
+
+ament_export_include_directories(
+  include
 )
 
 ament_export_targets(

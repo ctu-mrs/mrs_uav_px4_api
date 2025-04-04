@@ -1,23 +1,24 @@
-hw_interface_plugin: "mrs_uav_px4_api/Api"
+hw_interface_plugin: "mrs_uav_px4_api::MrsUavPx4Api"
 
 mavros_timeout: 1.0 # [s]
+mavros_passable_delay: 0.05 # [s]
 
-simulated_rtk:
+gnss:
   utm_zone: "32T"
   utm_x: 465710.758973
   utm_y: 5249465.43086
   amsl: 340.0
 
-inputs:
+input_mode:
   control_group: false
   attitude_rate: true
   attitude:      true
 
 outputs:
-  distance_sensor:      true
+  distance_sensor:      false
   gnss:                 true
   gnss_status:          true
-  rtk:                  true
+  rtk:                  false # TODO implement RTK
   imu:                  true
   altitude:             true
   magnetometer_heading: true

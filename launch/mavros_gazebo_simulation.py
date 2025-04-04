@@ -1,0 +1,151 @@
+#!/usr/bin/env python3
+
+import launch
+import os
+
+from launch_ros.actions import Node, PushROSNamespace, SetParameter
+from launch.actions import GroupAction, IncludeLaunchDescription, DeclareLaunchArgument
+from launch.substitutions import (
+    LaunchConfiguration,
+    IfElseSubstitution,
+    PythonExpression,
+    PathJoinSubstitution,
+    EnvironmentVariable,
+)
+from launch_xml.launch_description_sources import XMLLaunchDescriptionSource
+
+from ament_index_python.packages import get_package_share_directory
+
+
+def generate_launch_description():
+    
+    # launch.logging.get_logger().setLevel(launch.logging.logging.DEBUG)
+
+    ld = launch.LaunchDescription()
+
+    pkg_name = "mrs_uav_px4_api"
+
+    this_pkg_path = get_package_share_directory(pkg_name)
+
+    # #{ custom_config
+
+    custom_config = LaunchConfiguration('custom_config')
+
+    # this adds the args to the list of args available for this launch files
+    # these args can be listed at runtime using -s flag
+    # default_value is required to if the arg is supposed to be optional at launch time
+    ld.add_action(DeclareLaunchArgument(
+        'custom_config',
+        default_value="",
+        description="Path to the custom configuration file. The path can be absolute, starting with '/' or relative to the current working directory",
+    ))
+
+    # behaviour:
+    #     custom_config == "" => custom_config: ""
+    #     custom_config == "/<path>" => custom_config: "/<path>"
+    #     custom_config == "<path>" => custom_config: "$(pwd)/<path>"
+    custom_config = IfElseSubstitution(
+            condition=PythonExpression(['"', custom_config, '" != "" and ', 'not "', custom_config, '".startswith("/")']),
+            if_value=PathJoinSubstitution([EnvironmentVariable('PWD'), custom_config]),
+            else_value=custom_config
+    )
+
+    # #} end of custom_config
+
+    # #{ args from ENV
+
+    ID = os.getenv("ID", 1)
+    VEHICLE_NAME = os.getenv("VEHICLE_NAME", "uav")
+    fcu_url = os.getenv("fcu_url", f"udp://:1454{ID}@127.0.0.1:1458{ID}")
+    gcs_url = os.getenv("gcs_url", f"udp://:1455{ID}@127.0.0.1:1459{ID}")
+    use_sim_time=os.getenv('USE_SIM_TIME', "false") == "true"
+    respawn_mavros=os.getenv('respawn_mavros', "false") == "true"
+
+    # #} end of args from ENV
+
+    # the first one has the priority
+    # configs = [
+    #     this_pkg_path + '/config/mavros_px4_config.yaml',
+    #     get_package_share_directory("mavros") + "/launch/px4_config.yaml",
+    # ]
+
+    tgt_system = int(ID) + 1
+    uav_name = f"{VEHICLE_NAME}{ID}"
+    namespace = uav_name
+
+
+    px4_launch_arguments = {
+        "fcu_url": fcu_url,
+        "gcs_url": gcs_url,
+        "tgt_system": str(tgt_system),
+        "tgt_component": str(1),
+        "log_output": "screen",
+        "fcu_protocol": "v2.0",
+        "respawn_mavros": str(respawn_mavros),
+        "namespace": "mavros",
+        "pluginlists_yaml":  this_pkg_path + "/config/mavros_plugins.yaml",
+        "config_yaml": this_pkg_path + "/config/mavros_px4_config.yaml",
+    }
+
+    print(px4_launch_arguments.items())
+
+
+    launch_xml_include_with_namespace = GroupAction(
+        actions=[
+            # push_ros_namespace first to set namespace of included nodes for following actions
+            PushROSNamespace(uav_name),
+            IncludeLaunchDescription(
+                XMLLaunchDescriptionSource(
+                    os.path.join(
+                        get_package_share_directory('mavros'),
+                        'launch/node.launch')
+                    ),
+                    launch_arguments=px4_launch_arguments.items()
+            ),
+        ],
+        # parameters=[
+        #     {"fcu_url": fcu_url},
+        #     {"gcs_url": gcs_url},
+        #     {"tgt_system": tgt_system},
+        #     {"tgt_component": 1},
+        #     {"log_output": "screen"},
+        #     {"fcu_protocol": "v2.0"},
+        #     {"respawn_mavros": respawn_mavros},
+        #     {"namespace": f"{namespace}/mavros"},
+        #     {"pluginlists_yaml": get_package_share_directory("mavros") + "/launch/px4_pluginlists.yaml"},
+        #     {"config_yaml": configs},
+        # ],
+    )
+
+    ld.add_action(launch_xml_include_with_namespace)
+
+    # ld.add_action(
+        
+    #     Node(
+    #         namespace=namespace,
+    #         name='mavros',
+    #         package='mavros',
+    #         executable='mavros_node',
+        
+    #         parameters=[
+    #             {"fcu_url": fcu_url},
+    #             {"gcs_url": gcs_url},
+    #             {"tgt_system": tgt_system},
+    #             {"tgt_component": 1},
+    #             {"log_output": "screen"},
+    #             {"fcu_protocol": "v2.0"},
+    #             {"respawn_mavros": respawn_mavros},
+    #             {"namespace": f"{namespace}/mavros"},
+    #             {"pluginlists_yaml": get_package_share_directory("mavros") + "/launch/px4_pluginlists.yaml"},
+    #             {"config_yaml": configs},
+    #        ],
+
+    #        remappings=[
+    #            ("/diagnostics", f"/uav{ID}/diagnostics")
+    #         ],
+    #     )
+    # )
+
+    return ld
+
+
