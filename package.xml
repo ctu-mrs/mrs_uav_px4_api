@@ -35,6 +35,8 @@
   <depend>mavros</depend>
   <depend>mavros_msgs</depend>
 
+  <depend>mrs-geographiclib-datasets</depend>
+
   <export>
     <build_type>ament_cmake</build_type>
   </export>

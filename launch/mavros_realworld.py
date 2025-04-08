@@ -16,9 +16,8 @@ from launch_xml.launch_description_sources import XMLLaunchDescriptionSource
 
 from ament_index_python.packages import get_package_share_directory
 
-
 def generate_launch_description():
-    
+
     # launch.logging.get_logger().setLevel(launch.logging.logging.DEBUG)
 
     ld = launch.LaunchDescription()
@@ -54,8 +53,7 @@ def generate_launch_description():
 
     # #{ args from ENV
 
-    ID = os.getenv("ID", 1)
-    VEHICLE_NAME = os.getenv("VEHICLE_NAME", "uav")
+    uav_name = os.getenv("UAV_NAME", "uav")
     OLD_FW_PX4 = os.getenv("OLD_FW_PX4", "false") == "true"
 
     if OLD_FW_PX4:
@@ -75,10 +73,8 @@ def generate_launch_description():
     #     get_package_share_directory("mavros") + "/launch/px4_config.yaml",
     # ]
 
-    tgt_system = int(ID) + 1
-    uav_name = f"{VEHICLE_NAME}{ID}"
+    tgt_system = 1
     namespace = uav_name
-
 
     px4_launch_arguments = {
         "fcu_url": fcu_url,
@@ -94,7 +90,6 @@ def generate_launch_description():
     }
 
     print(px4_launch_arguments.items())
-
 
     launch_xml_include_with_namespace = GroupAction(
         actions=[
@@ -126,13 +121,13 @@ def generate_launch_description():
     ld.add_action(launch_xml_include_with_namespace)
 
     # ld.add_action(
-        
+
     #     Node(
     #         namespace=namespace,
     #         name='mavros',
     #         package='mavros',
     #         executable='mavros_node',
-        
+
     #         parameters=[
     #             {"fcu_url": fcu_url},
     #             {"gcs_url": gcs_url},
