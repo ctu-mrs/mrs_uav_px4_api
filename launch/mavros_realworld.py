@@ -2,6 +2,7 @@
 
 import launch
 import os
+import launch_ros
 
 from launch_ros.actions import Node, PushROSNamespace, SetParameter
 from launch.actions import GroupAction, IncludeLaunchDescription, DeclareLaunchArgument
@@ -98,12 +99,15 @@ def generate_launch_description():
             IncludeLaunchDescription(
                 XMLLaunchDescriptionSource(
                     os.path.join(
-                        get_package_share_directory('mavros'),
-                        'launch/node.launch')
+                        get_package_share_directory('mrs_uav_px4_api'),
+                        'launch/mavros.launch')
                     ),
                     launch_arguments=px4_launch_arguments.items()
             ),
         ],
+        # parameters=[
+        #     {"config/garmin/frame_id": uav_name + "/garmin"},
+        # ],
         # parameters=[
         #     {"fcu_url": fcu_url},
         #     {"gcs_url": gcs_url},
@@ -119,6 +123,17 @@ def generate_launch_description():
     )
 
     ld.add_action(launch_xml_include_with_namespace)
+
+    ld.add_action(
+        # Nodes under test
+        launch_ros.actions.Node(
+            package='tf2_ros',
+            namespace='',
+            executable='static_transform_publisher',
+            name='fcu_to_garmin',
+            arguments=["0.0", "0.0", "-0.05", "0", "1.57", "0", uav_name+"/fcu", "garmin"],
+        )
+    )
 
     # ld.add_action(
 

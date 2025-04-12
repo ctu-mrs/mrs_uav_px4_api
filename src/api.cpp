@@ -201,47 +201,54 @@ void MrsUavPx4Api::initialize(const rclcpp::Node::SharedPtr& node, std::shared_p
 
   // | ------------------- loading parameters ------------------- |
 
-  mrs_lib::ParamLoader param_loader(node_, "Px4Api");
+  mrs_lib::ParamLoader local_param_loader(node_, "MrsUavPx4Api");
 
   std::vector<std::string> config_files;
-  param_loader.loadParam("configs", config_files);
+  common_handlers_->main_param_loader->loadParamReusable("configs", config_files);
+
+  common_handlers_->main_param_loader->loadParam("simulation", _simulation_);
+
+  if (!common_handlers_->main_param_loader->loadedSuccessfully()) {
+    RCLCPP_ERROR(node_->get_logger(), "Could not load all parameters!");
+    rclcpp::shutdown();
+    exit(1);
+  }
 
   for (auto config_file : config_files) {
     RCLCPP_INFO(node_->get_logger(), "loading config file '%s'", config_file.c_str());
-    param_loader.addYamlFile(config_file);
+    local_param_loader.addYamlFile(config_file);
   }
 
-  param_loader.loadParam("mavros_timeout", _mavros_timeout_);
-  param_loader.loadParam("mavros_passable_delay", _mavros_passable_delay_);
-  param_loader.loadParam("simulation", _simulation_);
+  local_param_loader.loadParam("mavros_timeout", _mavros_timeout_);
+  local_param_loader.loadParam("mavros_passable_delay", _mavros_passable_delay_);
 
-  param_loader.loadParam("gnss/utm_x", _sim_rtk_utm_x_);
-  param_loader.loadParam("gnss/utm_y", _sim_rtk_utm_y_);
-  param_loader.loadParam("gnss/utm_zone", _sim_rtk_utm_zone_);
-  param_loader.loadParam("gnss/amsl", _sim_rtk_amsl_);
+  local_param_loader.loadParam("gnss/utm_x", _sim_rtk_utm_x_);
+  local_param_loader.loadParam("gnss/utm_y", _sim_rtk_utm_y_);
+  local_param_loader.loadParam("gnss/utm_zone", _sim_rtk_utm_zone_);
+  local_param_loader.loadParam("gnss/amsl", _sim_rtk_amsl_);
 
-  param_loader.loadParam("input_mode/control_group", (bool&)_capabilities_.accepts_control_group_cmd);
-  param_loader.loadParam("input_mode/attitude_rate", (bool&)_capabilities_.accepts_attitude_rate_cmd);
-  param_loader.loadParam("input_mode/attitude", (bool&)_capabilities_.accepts_attitude_cmd);
+  local_param_loader.loadParam("input_mode/control_group", (bool&)_capabilities_.accepts_control_group_cmd);
+  local_param_loader.loadParam("input_mode/attitude_rate", (bool&)_capabilities_.accepts_attitude_rate_cmd);
+  local_param_loader.loadParam("input_mode/attitude", (bool&)_capabilities_.accepts_attitude_cmd);
 
-  param_loader.loadParam("outputs/distance_sensor", (bool&)_capabilities_.produces_distance_sensor);
-  param_loader.loadParam("outputs/gnss", (bool&)_capabilities_.produces_gnss);
-  param_loader.loadParam("outputs/gnss_status", (bool&)_capabilities_.produces_gnss_status);
-  param_loader.loadParam("outputs/rtk", (bool&)_capabilities_.produces_rtk);
-  param_loader.loadParam("outputs/ground_truth", (bool&)_capabilities_.produces_ground_truth);
-  param_loader.loadParam("outputs/imu", (bool&)_capabilities_.produces_imu);
-  param_loader.loadParam("outputs/altitude", (bool&)_capabilities_.produces_altitude);
-  param_loader.loadParam("outputs/magnetometer_heading", (bool&)_capabilities_.produces_magnetometer_heading);
-  param_loader.loadParam("outputs/magnetic_field", (bool&)_capabilities_.produces_magnetic_field);
-  param_loader.loadParam("outputs/rc_channels", (bool&)_capabilities_.produces_rc_channels);
-  param_loader.loadParam("outputs/battery_state", (bool&)_capabilities_.produces_battery_state);
-  param_loader.loadParam("outputs/position", (bool&)_capabilities_.produces_position);
-  param_loader.loadParam("outputs/orientation", (bool&)_capabilities_.produces_orientation);
-  param_loader.loadParam("outputs/velocity", (bool&)_capabilities_.produces_velocity);
-  param_loader.loadParam("outputs/angular_velocity", (bool&)_capabilities_.produces_angular_velocity);
-  param_loader.loadParam("outputs/odometry", (bool&)_capabilities_.produces_odometry);
+  local_param_loader.loadParam("outputs/distance_sensor", (bool&)_capabilities_.produces_distance_sensor);
+  local_param_loader.loadParam("outputs/gnss", (bool&)_capabilities_.produces_gnss);
+  local_param_loader.loadParam("outputs/gnss_status", (bool&)_capabilities_.produces_gnss_status);
+  local_param_loader.loadParam("outputs/rtk", (bool&)_capabilities_.produces_rtk);
+  local_param_loader.loadParam("outputs/ground_truth", (bool&)_capabilities_.produces_ground_truth);
+  local_param_loader.loadParam("outputs/imu", (bool&)_capabilities_.produces_imu);
+  local_param_loader.loadParam("outputs/altitude", (bool&)_capabilities_.produces_altitude);
+  local_param_loader.loadParam("outputs/magnetometer_heading", (bool&)_capabilities_.produces_magnetometer_heading);
+  local_param_loader.loadParam("outputs/magnetic_field", (bool&)_capabilities_.produces_magnetic_field);
+  local_param_loader.loadParam("outputs/rc_channels", (bool&)_capabilities_.produces_rc_channels);
+  local_param_loader.loadParam("outputs/battery_state", (bool&)_capabilities_.produces_battery_state);
+  local_param_loader.loadParam("outputs/position", (bool&)_capabilities_.produces_position);
+  local_param_loader.loadParam("outputs/orientation", (bool&)_capabilities_.produces_orientation);
+  local_param_loader.loadParam("outputs/velocity", (bool&)_capabilities_.produces_velocity);
+  local_param_loader.loadParam("outputs/angular_velocity", (bool&)_capabilities_.produces_angular_velocity);
+  local_param_loader.loadParam("outputs/odometry", (bool&)_capabilities_.produces_odometry);
 
-  if (!param_loader.loadedSuccessfully()) {
+  if (!local_param_loader.loadedSuccessfully()) {
     RCLCPP_ERROR(node_->get_logger(), "Could not load all parameters!");
     rclcpp::shutdown();
   }
@@ -270,8 +277,7 @@ void MrsUavPx4Api::initialize(const rclcpp::Node::SharedPtr& node, std::shared_p
 
   sh_mavros_state_ = mrs_lib::SubscriberHandler<mavros_msgs::msg::State>(shopts, "~/mavros_state_in", &MrsUavPx4Api::callbackMavrosState, this);
 
-  sh_mavros_odometry_local_ =
-      mrs_lib::SubscriberHandler<nav_msgs::msg::Odometry>(shopts, "~/mavros_local_position_in", &MrsUavPx4Api::callbackOdometryLocal, this);
+  sh_mavros_odometry_local_ = mrs_lib::SubscriberHandler<nav_msgs::msg::Odometry>(shopts, "~/mavros_local_position_in", &MrsUavPx4Api::callbackOdometryLocal, this);
 
   sh_mavros_gps_ = mrs_lib::SubscriberHandler<sensor_msgs::msg::NavSatFix>(shopts, "~/mavros_global_position_in", &MrsUavPx4Api::callbackNavsatFix, this);
 
@@ -279,11 +285,9 @@ void MrsUavPx4Api::initialize(const rclcpp::Node::SharedPtr& node, std::shared_p
 
   sh_mavros_imu_ = mrs_lib::SubscriberHandler<sensor_msgs::msg::Imu>(shopts, "~/mavros_imu_in", &MrsUavPx4Api::callbackImu, this);
 
-  sh_mavros_magnetometer_heading_ =
-      mrs_lib::SubscriberHandler<std_msgs::msg::Float64>(shopts, "~/mavros_magnetometer_in", &MrsUavPx4Api::callbackMagnetometer, this);
+  sh_mavros_magnetometer_heading_ = mrs_lib::SubscriberHandler<std_msgs::msg::Float64>(shopts, "~/mavros_magnetometer_in", &MrsUavPx4Api::callbackMagnetometer, this);
 
-  sh_mavros_magnetic_field_ =
-      mrs_lib::SubscriberHandler<sensor_msgs::msg::MagneticField>(shopts, "~/mavros_magnetic_field_in", &MrsUavPx4Api::callbackMagneticField, this);
+  sh_mavros_magnetic_field_ = mrs_lib::SubscriberHandler<sensor_msgs::msg::MagneticField>(shopts, "~/mavros_magnetic_field_in", &MrsUavPx4Api::callbackMagneticField, this);
 
   sh_mavros_rc_ = mrs_lib::SubscriberHandler<mavros_msgs::msg::RCIn>(shopts, "~/mavros_rc_in", &MrsUavPx4Api::callbackRC, this);
 
@@ -643,18 +647,14 @@ void MrsUavPx4Api::timeoutMavrosState(void) {
     }
 
     RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 1000, "Have not received Mavros state for more than '%.3f s'", time.seconds());
-
   }
 
   if (time.seconds() > _mavros_passable_delay_) {
 
     RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 1000, "Not recieving Mavros state message for '%.3f s'! Setup the PixHawk SD card!!", time.seconds());
-    RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 1000,
-                         "This could be also caused by the not being PixHawk booted properly due to, e.g., antispark connector jerkyness.");
-    RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 1000,
-                         "The Mavros state should be supplied at 100 Hz to provided fast refresh rate on the state of the OFFBOARD mode.");
-    RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 1000,
-                         "If missing, the UAV could be disarmed by safety routines while not knowing it has switched to the MANUAL mode.");
+    RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 1000, "This could be also caused by the not being PixHawk booted properly due to, e.g., antispark connector jerkyness.");
+    RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 1000, "The Mavros state should be supplied at 100 Hz to provided fast refresh rate on the state of the OFFBOARD mode.");
+    RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 1000, "If missing, the UAV could be disarmed by safety routines while not knowing it has switched to the MANUAL mode.");
   }
 }
 
@@ -824,7 +824,11 @@ void MrsUavPx4Api::callbackDistanceSensor(const sensor_msgs::msg::Range::ConstSh
 
   if (_capabilities_.produces_distance_sensor) {
 
-    common_handlers_->publishers.publishDistanceSensor(*msg);
+    auto msg_out = *msg;
+
+    msg_out.min_range = 0.001;
+
+    common_handlers_->publishers.publishDistanceSensor(msg_out);
   }
 }
 
