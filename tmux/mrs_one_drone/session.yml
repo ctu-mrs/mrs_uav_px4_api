@@ -12,10 +12,16 @@ windows:
       layout: tiled
       panes:
         - ros2 run rmw_zenoh_cpp rmw_zenohd
-  - simulator:
+  - gz_sim:
       layout: tiled
       panes:
-        - export PX4_SYS_AUTOSTART=4001; export PX4_SIM_MODEL=gz_x500; /home/petr/ros2_ws/src/px4_firmware/build/px4_sitl_default/bin/px4 -i 1
+        # - ros2 launch ros_gz_sim gz_sim.launch.py
+        - ros2 launch ros_gz_sim gz_sim.launch.py gz_args:=grass_plane.world
+  - px4_firmware:
+      layout: tiled
+      panes:
+        # - export PX4_SYS_AUTOSTART=4001; export PX4_SIM_MODEL=gz_x500; /home/petr/ros2_ws/src/px4_firmware/build/px4_sitl_default/bin/px4 -i 1
+        - export PX4_SYS_AUTOSTART=4001; export PX4_SIM_MODEL=gz_x500; sleep 4; ros2 run px4 px4 -i 1
   - gz_ros_bridge:
       layout: tiled
       panes:
@@ -31,7 +37,7 @@ windows:
   - estimation_manager:
       layout: tiled
       panes:
-        - ros2 launch mrs_uav_managers estimation_manager.py platform_config:=./custom_configs/platform_config.yaml world_config:=./custom_configs/world_config.yaml custom_config:=./custom_configs/custom_config.yaml
+        - ros2 launch mrs_uav_managers estimation_manager.py platform_config:=./custom_configs/platform_config.yaml world_config:=./custom_configs/world_config.yaml custom_config:=./custom_configs/custom_config.yaml log_level:=INFO
   - control_manager:
       layout: tiled
       panes:
@@ -43,7 +49,7 @@ windows:
   - transform_manager:
       layout: tiled
       panes:
-        - ros2 launch mrs_uav_managers transform_manager.py platform_config:=./custom_configs/platform_config.yaml world_config:=./custom_configs/world_config.yaml custom_config:=./custom_configs/custom_config.yaml
+        - ros2 launch mrs_uav_managers transform_manager.py platform_config:=./custom_configs/platform_config.yaml world_config:=./custom_configs/world_config.yaml custom_config:=./custom_configs/custom_config.yaml log_level:=INFO
   - constraint_manager:
       layout: tiled
       panes:
