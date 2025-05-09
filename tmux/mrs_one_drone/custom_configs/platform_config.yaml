@@ -46,19 +46,3 @@ model_params:
     rpm:
       min: 1170.0 # [revolutions/minute]
       max: 7800.0 # [revolutions/minute]
-
-mrs_uav_managers:
-
-  constraint_manager:
-
-    default_constraints:
-      gps_garmin: "medium"
-      gps_baro: "medium"
-      rtk: "medium"
-      aloam: "slow"
-      hector_garmin: "slow"
-      vio: "slow"
-      optflow: "slow"
-      other: "slow"
-      ground_truth: "medium"
-

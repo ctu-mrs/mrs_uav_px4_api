@@ -34,43 +34,47 @@ windows:
       layout: tiled
       panes:
         - ros2 launch mrs_uav_px4_api api.py
-  - estimation_manager:
+  - core:
       layout: tiled
       panes:
-        - ros2 launch mrs_uav_managers estimation_manager.py platform_config:=./custom_configs/platform_config.yaml world_config:=./custom_configs/world_config.yaml custom_config:=./custom_configs/custom_config.yaml log_level:=INFO
-  - control_manager:
-      layout: tiled
-      panes:
-        - ros2 launch mrs_uav_managers control_manager.py platform_config:=./custom_configs/platform_config.yaml world_config:=./custom_configs/world_config.yaml custom_config:=./custom_configs/custom_config.yaml network_config:=./custom_configs/network_config.yaml
-  - uav_manager:
-      layout: tiled
-      panes:
-        - ros2 launch mrs_uav_managers uav_manager.py platform_config:=./custom_configs/platform_config.yaml world_config:=./custom_configs/world_config.yaml custom_config:=./custom_configs/custom_config.yaml
-  - transform_manager:
-      layout: tiled
-      panes:
-        - ros2 launch mrs_uav_managers transform_manager.py platform_config:=./custom_configs/platform_config.yaml world_config:=./custom_configs/world_config.yaml custom_config:=./custom_configs/custom_config.yaml log_level:=INFO
-  - constraint_manager:
-      layout: tiled
-      panes:
-        - ros2 launch mrs_uav_managers constraint_manager.py platform_config:=./custom_configs/platform_config.yaml custom_config:=./custom_configs/custom_config.yaml
+        - ros2 launch mrs_uav_core core.py platform_config:=./custom_configs/platform_config.yaml world_config:=./custom_configs/world_config.yaml custom_config:=./custom_configs/custom_config.yaml network_config:=./custom_configs/network_config.yaml
+  # - estimation_manager:
+  #     layout: tiled
+  #     panes:
+  #       - ros2 launch mrs_uav_managers estimation_manager.py platform_config:=./custom_configs/platform_config.yaml world_config:=./custom_configs/world_config.yaml custom_config:=./custom_configs/custom_config.yaml log_level:=INFO
+  # - control_manager:
+  #     layout: tiled
+  #     panes:
+  #       - ros2 launch mrs_uav_managers control_manager.py platform_config:=./custom_configs/platform_config.yaml world_config:=./custom_configs/world_config.yaml custom_config:=./custom_configs/custom_config.yaml network_config:=./custom_configs/network_config.yaml
+  # - uav_manager:
+  #     layout: tiled
+  #     panes:
+  #       - ros2 launch mrs_uav_managers uav_manager.py platform_config:=./custom_configs/platform_config.yaml world_config:=./custom_configs/world_config.yaml custom_config:=./custom_configs/custom_config.yaml
+  # - transform_manager:
+  #     layout: tiled
+  #     panes:
+  #       - ros2 launch mrs_uav_managers transform_manager.py platform_config:=./custom_configs/platform_config.yaml world_config:=./custom_configs/world_config.yaml custom_config:=./custom_configs/custom_config.yaml log_level:=INFO
+  # - constraint_manager:
+  #     layout: tiled
+  #     panes:
+  #       - ros2 launch mrs_uav_managers constraint_manager.py platform_config:=./custom_configs/platform_config.yaml custom_config:=./custom_configs/custom_config.yaml
   - autostart:
       layout: tiled
       panes:
         - ros2 launch mrs_uav_autostart automatic_start.py custom_config:=./custom_configs/automatic_start.yaml
-  - commands:
+  - takeoff_command:
       layout: tiled
       panes:
         - 'history -s ./takeoff.sh'
+  - goto_command:
+      layout: tiled
+      panes:
+        - 'history -s ./goto.sh -14 8 8 0'
   - rviz:
       layout: tiled
       panes:
         - ros2 run rviz2 rviz2 -d ./rviz.rviz
-  - reconfigure:
-      layout: tiled
-      panes:
-        - ros2 run rqt_reconfigure rqt_reconfigure
-  - layout:
-      layout: tiled
-      panes:
-        - sleep 2.0; ~/.i3/layout_manager.sh ./layout.json
+  # - reconfigure:
+  #     layout: tiled
+  #     panes:
+  #       - ros2 run rqt_reconfigure rqt_reconfigure
