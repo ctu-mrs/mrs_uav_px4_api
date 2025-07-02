@@ -880,7 +880,7 @@ void MrsUavPx4Api::callbackMagnetometer(const std_msgs::Float64::ConstPtr msg) {
         mrs_lib::geometry::degrees::convert<mrs_lib::geometry::radians>(
             msg->data);
 
-    // To be consistent with the local heading [-2pi, 2pi]
+    // To be consistent with the local heading [-pi, pi]
     auto sradians_heading =
         global_heading_rad.convert<mrs_lib::geometry::sradians>();
 
