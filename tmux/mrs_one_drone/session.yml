@@ -17,19 +17,25 @@ windows:
       panes:
         # - ros2 launch ros_gz_sim gz_sim.launch.py
         - ros2 launch ros_gz_sim gz_sim.launch.py gz_args:=grass_plane.world
-  - px4_firmware:
+        - ros2 launch mrs_uav_gazebo_simulation mrs_drone_spawner.launch.py
+  - spawn:
       layout: tiled
       panes:
-        # - export PX4_SYS_AUTOSTART=4001; export PX4_SIM_MODEL=gz_x500; /home/petr/ros2_ws/src/px4_firmware/build/px4_sitl_default/bin/px4 -i 1
-        - export PX4_SYS_AUTOSTART=4001; export PX4_SIM_MODEL=gz_x500; sleep 4; ros2 run px4 px4 -i 1
+        - print -z 'ros2 service call /spawn mrs_msgs/srv/String '
+        # - history -s 'ros2 service call /spawn mrs_msgs/srv/String "'{'value: 1 x500'}'"'
+  # - px4_firmware:
+  #     layout: tiled
+  #     panes:
+  #       # - export PX4_SYS_AUTOSTART=4001; export PX4_SIM_MODEL=gz_x500; /home/petr/ros2_ws/src/px4_firmware/build/px4_sitl_default/bin/px4 -i 1
+  #       - export PX4_SYS_AUTOSTART=4001; export PX4_SIM_MODEL=gz_x500; sleep 4; ros2 run px4 px4 -i 1
   - gz_ros_bridge:
       layout: tiled
       panes:
         - ros2 run ros_gz_bridge parameter_bridge "/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock"
-  - mavros:
-      layout: tiled
-      panes:
-        - ros2 launch mrs_uav_px4_api mavros_gazebo_simulation.py
+  # - mavros:
+  #     layout: tiled
+  #     panes:
+  #       - ros2 launch mrs_uav_px4_api mavros_gazebo_simulation.py
   - px4_api:
       layout: tiled
       panes:
