@@ -324,7 +324,7 @@ mrs_msgs::HwApiCapabilities MrsUavPx4Api::getCapabilities() {
   return _capabilities_;
 }
 
-//}
+a//}
 
 /* callbackControlActuatorCmd() //{ */
 
@@ -702,7 +702,7 @@ void MrsUavPx4Api::callbackOdometryLocal(const nav_msgs::Odometry::ConstPtr msg)
 
   if (_capabilities_.produces_position) {
     
-    if (_ref_latlon_init) {
+    if (_capabilities.produces_gnss and _ref_latlon_init) {
 
       // The px4 Azimuthal Equidistant Projection of WGS84 is inconsistent with the UTM conversion is MRS system,
       // therefore, we convert it back to WGS84 frame and then convert correctly using mrs_lib.
@@ -786,14 +786,16 @@ void MrsUavPx4Api::callbackOdometryLocal(const nav_msgs::Odometry::ConstPtr msg)
   // | -------------------- publish odometry -------------------- |
 
   if (_capabilities_.produces_odometry) {
-    if (_capabilities_.produces_position) {
+
+    if (_capabilities_.produces_gnss and _ref_latlon_init) {
+
       auto odom_new = *odom;
       odom_new.pose.pose.position.x = correct_x;
       odom_new.pose.pose.position.y = correct_y;
       common_handlers_->publishers.publishOdometry(odom_new);
-    }
-    else
-    {
+
+    } else {
+
       common_handlers_->publishers.publishOdometry(*odom);
     }
   }
