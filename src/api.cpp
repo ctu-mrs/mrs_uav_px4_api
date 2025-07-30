@@ -324,7 +324,7 @@ mrs_msgs::HwApiCapabilities MrsUavPx4Api::getCapabilities() {
   return _capabilities_;
 }
 
-a//}
+//}
 
 /* callbackControlActuatorCmd() //{ */
 
@@ -702,7 +702,7 @@ void MrsUavPx4Api::callbackOdometryLocal(const nav_msgs::Odometry::ConstPtr msg)
 
   if (_capabilities_.produces_position) {
     
-    if (_capabilities.produces_gnss and _ref_latlon_init) {
+    if (_capabilities_.produces_gnss and _ref_latlon_init) {
 
       // The px4 Azimuthal Equidistant Projection of WGS84 is inconsistent with the UTM conversion is MRS system,
       // therefore, we convert it back to WGS84 frame and then convert correctly using mrs_lib.
