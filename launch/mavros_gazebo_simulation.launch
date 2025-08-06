@@ -15,6 +15,7 @@
   <let name="uav_ns" value="uav$(var ID)"/>
 
   <node pkg="mavros" exec="mavros_node" namespace="$(var uav_ns)/mavros" output="$(var log_output)" respawn="$(var respawn_mavros)">
+    <param name="use_sim_time" value="true"/>
 
     <param name="fcu_url" value="$(var fcu_url)"/>
     <param name="gcs_url" value="$(var gcs_url)"/>
@@ -36,6 +37,8 @@
     <param from="$(var config_yaml)"/>
 
     <remap from="/diagnostics" to="diagnostics"/>
+    <remap from="/uas$(var tgt_system)/mavlink_sink" to="~/mavlink_sink"/>
+    <remap from="/uas$(var tgt_system)/mavlink_source" to="~/mavlink_source"/>
 
   </node>
 </launch>
