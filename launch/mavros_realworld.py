@@ -55,9 +55,9 @@ def generate_launch_description():
     # #{ args from ENV
 
     uav_name = os.getenv("UAV_NAME", "uav")
-    OLD_FW_PX4 = os.getenv("OLD_FW_PX4", "false") == "true"
+    OLD_PX4_FW = os.getenv("OLD_PX4_FW", "false") == "true"
 
-    if OLD_FW_PX4:
+    if OLD_PX4_FW:
       fcu_url = "/dev/pixhawk:921600"
     else:
       fcu_url = "/dev/pixhawk:2000000"
