@@ -10,7 +10,7 @@
   <arg name="tgt_component" default="1"/>
   <arg name="respawn_mavros" default="false"/>
   
-  <arg name="tgt_system" default="$(eval '1 + int($(var ID))')"/>
+  <arg name="tgt_system" default="$(eval '1 + int(\'$(var ID)\')')"/>
 
   <let name="uav_ns" value="uav$(var ID)"/>
 
@@ -37,8 +37,8 @@
     <param from="$(var config_yaml)"/>
 
     <remap from="/diagnostics" to="diagnostics"/>
-    <remap from="/uas$(var tgt_system)/mavlink_sink" to="~/mavlink_sink"/>
-    <remap from="/uas$(var tgt_system)/mavlink_source" to="~/mavlink_source"/>
+    <!-- <remap from="/uas$(var tgt_system)/mavlink_sink" to="~/mavlink_sink"/> -->
+    <!-- <remap from="/uas$(var tgt_system)/mavlink_source" to="~/mavlink_source"/> -->
 
   </node>
 </launch>
