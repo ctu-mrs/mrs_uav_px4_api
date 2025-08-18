@@ -27,11 +27,17 @@ PKG_NAME = 'mrs_uav_px4_api'
 # #{ generate_mavros_config(context)
 def generate_mavros_config(context):
     
+    id_value = context.launch_configurations['ID']
+    uav_name = f'uav{id_value}'
+    
     resource_path = os.path.join(get_package_share_path(PKG_NAME), 'config')
+
+
     jinja_env = jinja2.Environment(
             loader=jinja2.FileSystemLoader(resource_path),
             autoescape=False)
     template = jinja_env.get_template('mavros_px4_config.jinja.yaml')
+    
     rendered_template = template.render(uav_name=uav_name)
 
     fd, filepath = tempfile.mkstemp(prefix='mavros_px4_config_' + str(uav_name) + datetime.datetime.now().strftime("_%Y_%m_%d__%H_%M_%S"), suffix='.yaml')
@@ -156,8 +162,7 @@ def generate_launch_description():
         "respawn_mavros": respawn_mavros,
         "namespace": namespace,
         "pluginlists_yaml":  this_pkg_path + "/config/mavros_plugins.yaml",
-        # "config_yaml": this_pkg_path + "/config/mavros_px4_config.yaml"
-        "config_yaml": mavros_px4_config_file
+        "config_yaml": mavros_px4_config_file,
     }
 
     launch_xml_include_with_namespace = GroupAction(
@@ -189,5 +194,3 @@ def generate_launch_description():
 #     )
 
     return ld
-
-
