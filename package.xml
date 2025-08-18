@@ -33,6 +33,7 @@
   <depend>mrs_uav_hw_api</depend>
 
   <depend>mavros</depend>
+  <depend>mavros_extras</depend>
   <depend>mavros_msgs</depend>
 
   <depend>mrs-geographiclib-datasets</depend>
