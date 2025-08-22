@@ -27,37 +27,12 @@ def generate_launch_description():
 
     this_pkg_path = get_package_share_directory(pkg_name)
 
-    # #{ custom_config
-
-    custom_config = LaunchConfiguration('custom_config')
-
-    # this adds the args to the list of args available for this launch files
-    # these args can be listed at runtime using -s flag
-    # default_value is required to if the arg is supposed to be optional at launch time
-    ld.add_action(DeclareLaunchArgument(
-        'custom_config',
-        default_value="",
-        description="Path to the custom configuration file. The path can be absolute, starting with '/' or relative to the current working directory",
-    ))
-
-    # behaviour:
-    #     custom_config == "" => custom_config: ""
-    #     custom_config == "/<path>" => custom_config: "/<path>"
-    #     custom_config == "<path>" => custom_config: "$(pwd)/<path>"
-    custom_config = IfElseSubstitution(
-            condition=PythonExpression(['"', custom_config, '" != "" and ', 'not "', custom_config, '".startswith("/")']),
-            if_value=PathJoinSubstitution([EnvironmentVariable('PWD'), custom_config]),
-            else_value=custom_config
-    )
-
-    # #} end of custom_config
-
     # #{ args from ENV
 
     uav_name = os.getenv("UAV_NAME", "uav")
-    OLD_FW_PX4 = os.getenv("OLD_FW_PX4", "false") == "true"
+    OLD_PX4_FW = os.getenv("OLD_PX4_FW", "false") == "true"
 
-    if OLD_FW_PX4:
+    if OLD_PX4_FW:
       fcu_url = "/dev/pixhawk:921600"
     else:
       fcu_url = "/dev/pixhawk:2000000"
@@ -87,7 +62,7 @@ def generate_launch_description():
         "respawn_mavros": str(respawn_mavros),
         "namespace": "mavros",
         "pluginlists_yaml":  this_pkg_path + "/config/mavros_plugins.yaml",
-        "config_yaml": this_pkg_path + "/config/mavros_px4_config.yaml",
+        "config_yaml": this_pkg_path + "/config/mavros_px4_config_old_fw.yaml" if OLD_PX4_FW else this_pkg_path + "/config/mavros_px4_config.yaml",
     }
 
     print(px4_launch_arguments.items())

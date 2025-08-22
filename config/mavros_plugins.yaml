@@ -46,4 +46,17 @@
       - log_transfer
 
     # plugin_allowlist:
-      # 'sys_*'
+    #   - altitude
+    #   - attitude
+    #   - command
+    #   - distance_sensor
+    #   - global_position
+    #   - imu
+    #   - local_position
+    #   - manual_control
+    #   - odometry
+    #   - setpoint_accel
+    #   - setpoint_position
+    #   - setpoint_velocity
+    #   - sys_status
+    #   - sys_time

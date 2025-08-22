@@ -6,6 +6,10 @@ import os
 from launch_ros.actions import ComposableNodeContainer
 from launch_ros.descriptions import ComposableNode
 from launch.actions import DeclareLaunchArgument
+from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.actions import IncludeLaunchDescription, GroupAction, SetEnvironmentVariable
+from launch.conditions import IfCondition, UnlessCondition
+from launch_ros.substitutions import FindPackageShare
 from launch.substitutions import (
     LaunchConfiguration,
     IfElseSubstitution,
@@ -49,11 +53,24 @@ def generate_launch_description():
 
     # #} end of custom_config
 
+    # #{ simulation
+
+    simulation = LaunchConfiguration('simulation')
+
+    declare_simulation = DeclareLaunchArgument(
+        'simulation',
+        default_value="true" if os.getenv('RUN_TYPE', "simulation") == "simulation" else "false",
+        description='Whether to start a as a simulation or load into an existing container.'
+    )
+
+    ld.add_action(declare_simulation)
+
+    # #} end of simulation
+
     # #{ args from ENV
 
     uav_name=os.getenv('UAV_NAME', "uav1")
     use_sim_time=os.getenv('USE_SIM_TIME', "false") == "true"
-    simulation=os.getenv('RUN_TYPE', "true") == "simulation"
 
     # #} end of args from ENV
 
@@ -106,7 +123,7 @@ def generate_launch_description():
                   ("~/mavros_altitude_in", "mavros/altitude"),
                   ("~/mavros_battery_in", "mavros/battery"),
                   ("~/mavros_gps_status_raw_in", "mavros/gpsstatus/gps1/raw"),
-                  
+
                   ("~/mavros_cmd_out", "mavros/cmd/command"),
                   ("~/mavros_set_mode_out", "mavros/set_mode"),
                   ("~/mavros_attitude_setpoint_out", "mavros/setpoint_raw/attitude"),
@@ -118,6 +135,19 @@ def generate_launch_description():
         ],
 
     ))
+
+    ld.add_action(
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource([
+                PathJoinSubstitution([
+                    FindPackageShare('mrs_uav_px4_api'),
+                    'launch',
+                    'mavros_realworld.py'
+                    ])
+                ]),
+            condition=UnlessCondition(simulation)
+            )
+    )
 
     return ld
 
