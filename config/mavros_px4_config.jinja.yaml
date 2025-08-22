@@ -18,7 +18,7 @@
 # sys_time
 /**/time:
   ros__parameters:
-    time_ref_source: "fcu"    # time_reference source
+    time_ref_source: "{{ uav_name}}/fcu"    # time_reference source
     timesync_mode: MAVLINK
     timesync_avg_alpha: 0.6   # timesync averaging factor
     timesync_rate: 10.0       # TIMESYNC rate in Hertz (feature disabled if 0.0)
@@ -48,20 +48,20 @@
 # global_position
 /**/global_position:
   ros__parameters:
-    frame_id: "map"               # origin frame
-    child_frame_id: "base_link"   # body-fixed frame
+    frame_id: "{{ uav_name }}/local_origin"               # origin frame
+    child_frame_id: "{{ uav_name }}/fcu"   # body-fixed frame
     rot_covariance: 99999.0       # covariance for attitude?
-    gps_uere: 1.0                 # User Equivalent Range Error (UERE) of GPS sensor (m)
+    gps_uere: 1.0                 # User Equivalent Range Error () of GPS sensor (m)
     use_relative_alt: true        # use relative altitude for local coordinates
     tf.send: false                # send TF?
-    tf.frame_id: "map"            # TF frame_id
-    tf.global_frame_id: "earth"   # TF earth frame_id
-    tf.child_frame_id: "base_link"  # TF child_frame_id
+    tf.frame_id: "{{ uav_name }}/local_origin"            # TF frame_id
+    tf.global_frame_id: "{{ uav_name }}/utm_origin"   # TF earth frame_id
+    tf.child_frame_id: "{{ uav_name }}/fcu"  # TF child_frame_id
 
 # imu_pub
 /**/imu:
   ros__parameters:
-    frame_id: "base_link"
+    frame_id: "{{ uav_name }}/fcu"
     # need find actual values
     linear_acceleration_stdev: 0.0003
     angular_velocity_stdev: 0.0003490659  # 0.02 degrees
@@ -71,10 +71,10 @@
 # local_position
 /**/local_position:
   ros__parameters:
-    frame_id: "map"
+    frame_id: "{{ uav_name }}/local_origin"
     tf.send: false
-    tf.frame_id: "map"
-    tf.child_frame_id: "base_link"
+    tf.frame_id: "{{ uav_name }}/local_origin"
+    tf.child_frame_id: "{{ uav_name }}/fcu"
     tf.send_fcu: false
 
 # param
@@ -94,7 +94,7 @@
     reverse_thrust: false       # allow reversed thrust
     use_quaternion: false       # enable PoseStamped topic subscriber
     tf.listen: false            # enable tf listener (disable topic subscribers)
-    tf.frame_id: "map"
+    # tf.frame_id: "map"
     tf.child_frame_id: "target_attitude"
     tf.rate_limit: 50.0
 
@@ -109,7 +109,7 @@
 /**/setpoint_position:
   ros__parameters:
     tf.listen: false            # enable tf listener (disable topic subscribers)
-    tf.frame_id: "map"
+    # tf.frame_id: "map"
     tf.child_frame_id: "target_position"
     tf.rate_limit: 50.0
     mav_frame: LOCAL_NED
@@ -118,7 +118,7 @@
 /**/guided_target:
   ros__parameters:
     tf.listen: false           # enable tf listener (disable topic subscribers)
-    tf.frame_id: "map"
+    # tf.frame_id: "map"
     tf.child_frame_id: "target_position"
     tf.rate_limit: 50.0
 
@@ -158,7 +158,7 @@
         frame_id: "{{ uav_name }}/garmin"
         orientation: CUSTOM
         field_of_view: 0.0
-        send_tf: true
+        send_tf: false
         sensor_position: {x: 0.0, y: 0.0625, z: -0.009}
 
 # image_pub
@@ -183,8 +183,8 @@
     fix_type: 3             # type of GPS fix (default: 3D)
     tf.listen: false
     tf.send: false           # send TF?
-    tf.frame_id: "map"       # TF frame_id
-    tf.child_frame_id: "fix" # TF child_frame_id
+    # tf.frame_id: "map"       # TF frame_id
+    # tf.child_frame_id: "fix" # TF child_frame_id
     tf.rate_limit: 10.0      # TF rate
     gps_rate: 5.0           # GPS data publishing rate
 
@@ -198,7 +198,7 @@
     image.height: 480
     camera.fov_x: 2.0071286398    # default: 115 [degrees]
     camera.fov_y: 2.0071286398
-    tf.send: true
+    tf.send: false
     tf.listen: false
     tf.frame_id: "landing_target"
     tf.child_frame_id: "camera_center"
@@ -224,8 +224,8 @@
 # odom
 /**/odometry:
   ros__parameters:
-    fcu.odom_parent_id_des: "map"   # desired parent frame rotation of the FCU's odometry
-    fcu.odom_child_id_des: "base_link"    # desired child frame rotation of the FCU's odometry
+    fcu.odom_parent_id_des: "{{ uav_name }}/local_origin"   # desired parent frame rotation of the FCU's odometry
+    fcu.odom_child_id_des: "{{ uav_name }}/fcu"    # desired child frame rotation of the FCU's odometry
 
 # px4flow
 /**/px4flow:
