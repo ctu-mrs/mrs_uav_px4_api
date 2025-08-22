@@ -3,7 +3,7 @@
 import launch
 import os
 
-from launch_ros.actions import ComposableNodeContainer
+from launch_ros.actions import ComposableNodeContainer, Node
 from launch_ros.descriptions import ComposableNode
 from launch.actions import DeclareLaunchArgument
 from launch.launch_description_sources import PythonLaunchDescriptionSource
@@ -147,6 +147,17 @@ def generate_launch_description():
                 ]),
             condition=UnlessCondition(simulation)
             )
+    )
+
+    ld.add_action(
+        Node(
+            package='tf2_ros',
+            namespace='',
+            executable='static_transform_publisher',
+            name='fcu_to_garmin',
+            arguments=["0.0", "0.0625", "-0.009", "0", "1.5708", "-1.5708", uav_name + "/fcu", uav_name + "/garmin"],
+            condition=IfCondition(simulation)
+        )
     )
 
     return ld
