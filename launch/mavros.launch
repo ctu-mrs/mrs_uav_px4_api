@@ -13,6 +13,11 @@
 	<arg name="respawn_mavros" default="false" />
 	<arg name="namespace" default="mavros"/>
 	<arg name="use_sim_time" default="false"/>
+	
+	<arg name="base_link_frame_id" default=""/>
+	<arg name="odom_frame_id" default=""/>
+	<arg name="map_frame_id" default=""/>
+
 
 	<node pkg="mavros" exec="mavros_node" namespace="$(var namespace)" output="screen">
 		<param name="fcu_url" value="$(var fcu_url)" />
@@ -21,6 +26,10 @@
 		<param name="tgt_component" value="$(var tgt_component)" />
 		<param name="fcu_protocol" value="$(var fcu_protocol)" />
 		<param name="use_sim_time" value="$(var use_sim_time)" />
+		
+		<param name="base_link_frame_id" value="$(var base_link_frame_id)" />
+		<param name="odom_frame_id" value="$(var odom_frame_id)" />
+		<param name="map_frame_id" value="$(var map_frame_id)" />
 
 		<!-- load mavros plugin config -->
 		<param from="$(var pluginlists_yaml)" />
