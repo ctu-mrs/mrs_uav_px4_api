@@ -130,6 +130,7 @@ private:
   mrs_lib::SubscriberHandler<nav_msgs::msg::Odometry>         sh_ground_truth_;
   mrs_lib::SubscriberHandler<mavros_msgs::msg::State>         sh_mavros_state_;
   mrs_lib::SubscriberHandler<nav_msgs::msg::Odometry>         sh_mavros_odometry_local_;
+  mrs_lib::SubscriberHandler<nav_msgs::msg::Odometry>         sh_mavros_odometry_in_;
   mrs_lib::SubscriberHandler<sensor_msgs::msg::NavSatFix>     sh_mavros_gps_;
   mrs_lib::SubscriberHandler<sensor_msgs::msg::Range>         sh_mavros_distance_sensor_;
   mrs_lib::SubscriberHandler<sensor_msgs::msg::Imu>           sh_mavros_imu_;
@@ -144,6 +145,7 @@ private:
   void callbackGroundTruth(const nav_msgs::msg::Odometry::ConstSharedPtr msg);
   void callbackMavrosState(const mavros_msgs::msg::State::ConstSharedPtr msg);
   void callbackOdometryLocal(const nav_msgs::msg::Odometry::ConstSharedPtr msg);
+  void callbackOdometryIn(const nav_msgs::msg::Odometry::ConstSharedPtr msg);
   void callbackNavsatFix(const sensor_msgs::msg::NavSatFix::ConstSharedPtr msg);
   void callbackDistanceSensor(const sensor_msgs::msg::Range::ConstSharedPtr msg);
   void callbackImu(const sensor_msgs::msg::Imu::ConstSharedPtr msg);
@@ -280,6 +282,8 @@ void MrsUavPx4Api::initialize(const rclcpp::Node::SharedPtr& node, std::shared_p
   sh_mavros_state_ = mrs_lib::SubscriberHandler<mavros_msgs::msg::State>(shopts, "~/mavros_state_in", &MrsUavPx4Api::callbackMavrosState, this);
 
   sh_mavros_odometry_local_ = mrs_lib::SubscriberHandler<nav_msgs::msg::Odometry>(shopts, "~/mavros_local_position_in", &MrsUavPx4Api::callbackOdometryLocal, this);
+
+  sh_mavros_odometry_in_ = mrs_lib::SubscriberHandler<nav_msgs::msg::Odometry>(shopts, "~/mavros_odometry_in", &MrsUavPx4Api::callbackOdometryIn, this);
 
   sh_mavros_gps_ = mrs_lib::SubscriberHandler<sensor_msgs::msg::NavSatFix>(shopts, "~/mavros_global_position_in", &MrsUavPx4Api::callbackNavsatFix, this);
 
@@ -757,19 +761,6 @@ void MrsUavPx4Api::callbackOdometryLocal(const nav_msgs::msg::Odometry::ConstSha
     common_handlers_->publishers.publishPosition(position);
   }
 
-  // | ------------------- publish orientation ------------------ |
-
-  if (_capabilities_.produces_orientation) {
-
-    geometry_msgs::msg::QuaternionStamped orientation;
-
-    orientation.header.stamp    = odom->header.stamp;
-    orientation.header.frame_id = _uav_name_ + "/" + _world_frame_name_;
-    orientation.quaternion      = odom->pose.pose.orientation;
-
-    common_handlers_->publishers.publishOrientation(orientation);
-  }
-
   // | -------------------- publish velocity -------------------- |
 
   if (_capabilities_.produces_velocity) {
@@ -781,6 +772,41 @@ void MrsUavPx4Api::callbackOdometryLocal(const nav_msgs::msg::Odometry::ConstSha
     velocity.vector          = odom->twist.twist.linear;
 
     common_handlers_->publishers.publishVelocity(velocity);
+  }
+
+  // | -------------------- publish odometry -------------------- |
+
+  if (_capabilities_.produces_odometry) {
+    common_handlers_->publishers.publishOdometry(*odom);
+  }
+}
+
+//}
+
+/* callbackOdometryIn() //{ */
+
+void MrsUavPx4Api::callbackOdometryIn(const nav_msgs::msg::Odometry::ConstSharedPtr msg) {
+
+  if (!is_initialized_) {
+    return;
+  }
+
+  RCLCPP_INFO_ONCE(node_->get_logger(), "getting Mavros's odometry in");
+
+  auto odom = msg;
+
+
+  // | ------------------- publish orientation ------------------ |
+
+  if (_capabilities_.produces_orientation) {
+
+    geometry_msgs::msg::QuaternionStamped orientation;
+
+    orientation.header.stamp    = odom->header.stamp;
+    orientation.header.frame_id = _uav_name_ + "/" + _world_frame_name_;
+    orientation.quaternion      = odom->pose.pose.orientation;
+
+    common_handlers_->publishers.publishOrientation(orientation);
   }
 
   // | ---------------- publish angular velocity ---------------- |
@@ -796,11 +822,6 @@ void MrsUavPx4Api::callbackOdometryLocal(const nav_msgs::msg::Odometry::ConstSha
     common_handlers_->publishers.publishAngularVelocity(angular_velocity);
   }
 
-  // | -------------------- publish odometry -------------------- |
-
-  if (_capabilities_.produces_odometry) {
-    common_handlers_->publishers.publishOdometry(*odom);
-  }
 }
 
 //}
