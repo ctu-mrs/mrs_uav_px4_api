@@ -43,8 +43,8 @@
       <remap if="$(eval arg('RUN_TYPE') == 'simulation')" from="~ground_truth_in" to="ground_truth" />
       <remap if="$(eval arg('RUN_TYPE') == 'realworld')" from="~rtk_in" to="rtk/bestpos" />
       <remap from="~mavros_state_in" to="mavros/state" />
-      <remap if="$(eval arg('OLD_PX4_FW') == 0)" from="~mavros_local_position_in" to="mavros/odometry/in" />
-      <remap if="$(eval arg('OLD_PX4_FW') == 1)" from="~mavros_local_position_in" to="mavros/local_position/odom" />
+      <remap from="~mavros_local_position_in" to="mavros/local_position/odom" />
+      <remap from="~mavros_odometry_in" to="mavros/odometry/in" />
       <remap from="~mavros_global_position_in" to="mavros/global_position/global" />
       <remap from="~mavros_garmin_in" to="mavros/distance_sensor/garmin" />
       <remap from="~mavros_imu_in" to="mavros/imu/data" />
