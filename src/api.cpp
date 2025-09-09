@@ -131,6 +131,9 @@ private:
   mrs_lib::SubscribeHandler<nav_msgs::Odometry> sh_mavros_odometry_local_;
   void                                          callbackOdometryLocal(const nav_msgs::Odometry::ConstPtr msg);
 
+  mrs_lib::SubscribeHandler<nav_msgs::Odometry> sh_mavros_odometry_in_;
+  void                                          callbackOdometryIn(const nav_msgs::Odometry::ConstPtr msg);
+
   mrs_lib::SubscribeHandler<sensor_msgs::NavSatFix> sh_mavros_gps_;
   void                                              callbackNavsatFix(const sensor_msgs::NavSatFix::ConstPtr msg);
 
@@ -259,6 +262,8 @@ void MrsUavPx4Api::initialize(const ros::NodeHandle& parent_nh, std::shared_ptr<
                                                                    &MrsUavPx4Api::callbackMavrosState, this);
 
   sh_mavros_odometry_local_ = mrs_lib::SubscribeHandler<nav_msgs::Odometry>(shopts, "mavros_local_position_in", &MrsUavPx4Api::callbackOdometryLocal, this);
+
+  sh_mavros_odometry_in_ = mrs_lib::SubscribeHandler<nav_msgs::Odometry>(shopts, "mavros_odometry_in", &MrsUavPx4Api::callbackOdometryIn, this);
 
   sh_mavros_gps_ = mrs_lib::SubscribeHandler<sensor_msgs::NavSatFix>(shopts, "mavros_global_position_in", &MrsUavPx4Api::callbackNavsatFix, this);
 
@@ -678,6 +683,48 @@ void MrsUavPx4Api::callbackMavrosState(const mavros_msgs::State::ConstPtr msg) {
 
 //}
 
+/* callbackOdometryIn() //{ */
+
+void MrsUavPx4Api::callbackOdometryIn(const nav_msgs::Odometry::ConstPtr msg) {
+
+  if (!is_initialized_) {
+    return;
+  }
+
+  ROS_INFO_ONCE("[MrsUavPx4Api]: getting Mavros's odometry in");
+
+  auto odom = msg;
+
+  // | ------------------- publish orientation ------------------ |
+
+  if (_capabilities_.produces_orientation) {
+
+    geometry_msgs::QuaternionStamped orientation;
+
+    orientation.header.stamp    = odom->header.stamp;
+    orientation.header.frame_id = _uav_name_ + "/" + _world_frame_name_;
+    orientation.quaternion      = odom->pose.pose.orientation;
+
+    common_handlers_->publishers.publishOrientation(orientation);
+  }
+
+  // | ---------------- publish angular velocity ---------------- |
+
+  if (_capabilities_.produces_angular_velocity) {
+
+    geometry_msgs::Vector3Stamped angular_velocity;
+
+    angular_velocity.header.stamp    = odom->header.stamp;
+    angular_velocity.header.frame_id = _uav_name_ + "/" + _body_frame_name_;
+    angular_velocity.vector          = odom->twist.twist.angular;
+
+    common_handlers_->publishers.publishAngularVelocity(angular_velocity);
+  }
+
+}
+
+//}
+
 /* callbackOdometryLocal() //{ */
 
 void MrsUavPx4Api::callbackOdometryLocal(const nav_msgs::Odometry::ConstPtr msg) {
@@ -744,19 +791,6 @@ void MrsUavPx4Api::callbackOdometryLocal(const nav_msgs::Odometry::ConstPtr msg)
     common_handlers_->publishers.publishPosition(position);
   }
 
-  // | ------------------- publish orientation ------------------ |
-
-  if (_capabilities_.produces_orientation) {
-
-    geometry_msgs::QuaternionStamped orientation;
-
-    orientation.header.stamp    = odom->header.stamp;
-    orientation.header.frame_id = _uav_name_ + "/" + _world_frame_name_;
-    orientation.quaternion      = odom->pose.pose.orientation;
-
-    common_handlers_->publishers.publishOrientation(orientation);
-  }
-
   // | -------------------- publish velocity -------------------- |
 
   if (_capabilities_.produces_velocity) {
@@ -768,19 +802,6 @@ void MrsUavPx4Api::callbackOdometryLocal(const nav_msgs::Odometry::ConstPtr msg)
     velocity.vector          = odom->twist.twist.linear;
 
     common_handlers_->publishers.publishVelocity(velocity);
-  }
-
-  // | ---------------- publish angular velocity ---------------- |
-
-  if (_capabilities_.produces_angular_velocity) {
-
-    geometry_msgs::Vector3Stamped angular_velocity;
-
-    angular_velocity.header.stamp    = odom->header.stamp;
-    angular_velocity.header.frame_id = _uav_name_ + "/" + _body_frame_name_;
-    angular_velocity.vector          = odom->twist.twist.angular;
-
-    common_handlers_->publishers.publishAngularVelocity(angular_velocity);
   }
 
   // | -------------------- publish odometry -------------------- |
