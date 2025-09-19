@@ -70,6 +70,8 @@ public:
   rclcpp::Node::SharedPtr  node_;
   rclcpp::Clock::SharedPtr clock_;
 
+  rclcpp::CallbackGroup::SharedPtr callback_group_;
+
   // | --------------------- status methods --------------------- |
 
   mrs_msgs::msg::HwApiStatus       getStatus();
@@ -199,6 +201,8 @@ void MrsUavPx4Api::initialize(const rclcpp::Node::SharedPtr& node, std::shared_p
 
   _capabilities_.api_name = "Px4Api";
 
+  callback_group_ = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+
   last_mavros_state_time_ = rclcpp::Time(0, 0, clock_->get_clock_type());
 
   // | ------------------- loading parameters ------------------- |
@@ -257,8 +261,8 @@ void MrsUavPx4Api::initialize(const rclcpp::Node::SharedPtr& node, std::shared_p
 
   // | --------------------- service clients -------------------- |
 
-  sch_mavros_command_long_ = mrs_lib::ServiceClientHandler<mavros_msgs::srv::CommandLong>(node_, "~/mavros_cmd_out");
-  sch_mavros_mode_         = mrs_lib::ServiceClientHandler<mavros_msgs::srv::SetMode>(node_, "~/mavros_set_mode_out");
+  sch_mavros_command_long_ = mrs_lib::ServiceClientHandler<mavros_msgs::srv::CommandLong>(node_, "~/mavros_cmd_out", callback_group_);
+  sch_mavros_mode_         = mrs_lib::ServiceClientHandler<mavros_msgs::srv::SetMode>(node_, "~/mavros_set_mode_out", callback_group_);
 
   // | ----------------------- subscribers ---------------------- |
 
@@ -268,6 +272,7 @@ void MrsUavPx4Api::initialize(const rclcpp::Node::SharedPtr& node, std::shared_p
   shopts.no_message_timeout = mrs_lib::no_timeout;
   shopts.threadsafe         = true;
   shopts.autostart          = true;
+  shopts.subscription_options.callback_group = callback_group_;
 
   if (_simulation_) {
     sh_ground_truth_ = mrs_lib::SubscriberHandler<nav_msgs::msg::Odometry>(shopts, "~/ground_truth_in", &MrsUavPx4Api::callbackGroundTruth, this);
@@ -314,6 +319,7 @@ void MrsUavPx4Api::initialize(const rclcpp::Node::SharedPtr& node, std::shared_p
 
     opts.node      = node_;
     opts.autostart = true;
+    opts.callback_group = callback_group_;
 
     timer_main_ = std::make_shared<TimerType>(opts, rclcpp::Rate(10.0, clock_), callback_fcn);
   }
