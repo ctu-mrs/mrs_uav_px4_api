@@ -143,7 +143,7 @@ def generate_launch_description():
                 PathJoinSubstitution([
                     FindPackageShare('mrs_uav_px4_api'),
                     'launch',
-                    'mavros_realworld.py'
+                    'mavros_realworld.launch.py'
                     ])
                 ]),
             condition=UnlessCondition(simulation)
