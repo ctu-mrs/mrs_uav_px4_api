@@ -268,13 +268,17 @@ void MrsUavPx4Api::initialize(const rclcpp::Node::SharedPtr& node, std::shared_p
 
   // | ----------------------- subscribers ---------------------- |
 
+  rclcpp::QoS qos_profile(10);
+  qos_profile.reliability(RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT);
+
   mrs_lib::SubscriberHandlerOptions shopts;
-  shopts.node               = node_;
-  shopts.node_name          = "MrsHwPx4Api";
-  shopts.no_message_timeout = mrs_lib::no_timeout;
-  shopts.threadsafe         = true;
-  shopts.autostart          = true;
+  shopts.node                                = node_;
+  shopts.node_name                           = "MrsHwPx4Api";
+  shopts.no_message_timeout                  = mrs_lib::no_timeout;
+  shopts.threadsafe                          = true;
+  shopts.autostart                           = true;
   shopts.subscription_options.callback_group = callback_group_;
+  shopts.qos                                 = qos_profile;
 
   if (_simulation_) {
     sh_ground_truth_ = mrs_lib::SubscriberHandler<nav_msgs::msg::Odometry>(shopts, "~/ground_truth_in", &MrsUavPx4Api::callbackGroundTruth, this);
@@ -321,8 +325,8 @@ void MrsUavPx4Api::initialize(const rclcpp::Node::SharedPtr& node, std::shared_p
 
     mrs_lib::TimerHandlerOptions opts;
 
-    opts.node      = node_;
-    opts.autostart = true;
+    opts.node           = node_;
+    opts.autostart      = true;
     opts.callback_group = callback_group_;
 
     timer_main_ = std::make_shared<TimerType>(opts, rclcpp::Rate(10.0, clock_), callback_fcn);
@@ -827,7 +831,6 @@ void MrsUavPx4Api::callbackOdometryIn(const nav_msgs::msg::Odometry::ConstShared
 
     common_handlers_->publishers.publishAngularVelocity(angular_velocity);
   }
-
 }
 
 //}
