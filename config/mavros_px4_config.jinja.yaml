@@ -155,10 +155,10 @@
       garmin:
         id: 0
         frame_id: "{{ uav_name }}/garmin"
-        orientation: PITCH_270
+        orientation: CUSTOM
         field_of_view: 0.0
         send_tf: false
-        sensor_position: {x:  0.0, y:  0.0, z:  -0.1}
+        sensor_position: {x: 0.0, y: 0.0625, z: -0.009}
 
 # image_pub
 /**/image:
