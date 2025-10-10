@@ -200,7 +200,7 @@
     tf.send: true
     tf.listen: false
     tf.frame_id: "{{ uav_name }}/landing_target"
-    tf.child_frame_id: "{{camera_center"
+    tf.child_frame_id: "{{ uav_name }}/camera_center"
     tf.rate_limit: 10.0
     target_size: {x: 0.3, y: 0.3}
 
