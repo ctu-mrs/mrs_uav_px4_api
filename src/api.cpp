@@ -67,13 +67,13 @@ namespace mrs_uav_px4_api
 class MrsUavPx4Api : public mrs_uav_hw_api::MrsUavHwApi {
 
 public:
-  ~MrsUavPx4Api() {};
+  ~MrsUavPx4Api(){};
 
   void initialize(const rclcpp::Node::SharedPtr &node, std::shared_ptr<mrs_uav_hw_api::CommonHandlers_t> common_handlers);
 
   void destroy();
 
-  rclcpp::Node::SharedPtr node_;
+  rclcpp::Node::SharedPtr  node_;
   rclcpp::Clock::SharedPtr clock_;
 
   rclcpp::CallbackGroup::SharedPtr callback_group_;
@@ -81,7 +81,7 @@ public:
 
   // | --------------------- status methods --------------------- |
 
-  mrs_msgs::msg::HwApiStatus getStatus();
+  mrs_msgs::msg::HwApiStatus       getStatus();
   mrs_msgs::msg::HwApiCapabilities getCapabilities();
 
   // | --------------------- topic callbacks -------------------- |
@@ -122,7 +122,7 @@ private:
   std::shared_ptr<mrs_uav_hw_api::CommonHandlers_t> common_handlers_;
 
   rclcpp::Time last_mavros_state_time_;
-  std::mutex mutex_last_mavros_state_time_;
+  std::mutex   mutex_last_mavros_state_time_;
 
   // | ----------------------- parameters ----------------------- |
 
@@ -136,14 +136,14 @@ private:
   // Needs a default value
   rclcpp::Duration _mavros_timeout_duration_ = rclcpp::Duration::from_seconds(0);
   rclcpp::Duration _general_topic_timeout_   = rclcpp::Duration::from_seconds(1);
-  double _mavros_passable_delay_;
+  double           _mavros_passable_delay_;
 
   bool _simulation_;
 
-  double _sim_rtk_utm_x_;
-  double _sim_rtk_utm_y_;
+  double      _sim_rtk_utm_x_;
+  double      _sim_rtk_utm_y_;
   std::string _sim_rtk_utm_zone_;
-  double _sim_rtk_amsl_;
+  double      _sim_rtk_amsl_;
 
   double _ref_sin_lat;
   double _ref_cos_lat;
@@ -151,31 +151,31 @@ private:
   double _ref_lon;
   double _ref_utm_x;
   double _ref_utm_y;
-  bool _ref_latlon_init = false;
+  bool   _ref_latlon_init = false;
 
   // | --------------------- service clients -------------------- |
 
   mrs_lib::ServiceClientHandler<mavros_msgs::srv::CommandLong> sch_mavros_command_long_;
-  mrs_lib::ServiceClientHandler<mavros_msgs::srv::SetMode> sch_mavros_mode_;
+  mrs_lib::ServiceClientHandler<mavros_msgs::srv::SetMode>     sch_mavros_mode_;
 
   // | --------------------- service servers -------------------- |
   mrs_lib::ServiceServerHandler<std_srvs::srv::SetBool> ssh_ignore_ground_truth_;
 
   // | ----------------------- subscribers ---------------------- |
 
-  mrs_lib::SubscriberHandler<nav_msgs::msg::Odometry> sh_ground_truth_;
-  mrs_lib::SubscriberHandler<mavros_msgs::msg::State> sh_mavros_state_;
-  mrs_lib::SubscriberHandler<nav_msgs::msg::Odometry> sh_mavros_odometry_local_;
-  mrs_lib::SubscriberHandler<nav_msgs::msg::Odometry> sh_mavros_odometry_in_;
-  mrs_lib::SubscriberHandler<sensor_msgs::msg::NavSatFix> sh_mavros_gps_;
-  mrs_lib::SubscriberHandler<sensor_msgs::msg::Range> sh_mavros_distance_sensor_;
-  mrs_lib::SubscriberHandler<sensor_msgs::msg::Imu> sh_mavros_imu_;
-  mrs_lib::SubscriberHandler<std_msgs::msg::Float64> sh_mavros_magnetometer_heading_;
+  mrs_lib::SubscriberHandler<nav_msgs::msg::Odometry>         sh_ground_truth_;
+  mrs_lib::SubscriberHandler<mavros_msgs::msg::State>         sh_mavros_state_;
+  mrs_lib::SubscriberHandler<nav_msgs::msg::Odometry>         sh_mavros_odometry_local_;
+  mrs_lib::SubscriberHandler<nav_msgs::msg::Odometry>         sh_mavros_odometry_in_;
+  mrs_lib::SubscriberHandler<sensor_msgs::msg::NavSatFix>     sh_mavros_gps_;
+  mrs_lib::SubscriberHandler<sensor_msgs::msg::Range>         sh_mavros_distance_sensor_;
+  mrs_lib::SubscriberHandler<sensor_msgs::msg::Imu>           sh_mavros_imu_;
+  mrs_lib::SubscriberHandler<std_msgs::msg::Float64>          sh_mavros_magnetometer_heading_;
   mrs_lib::SubscriberHandler<sensor_msgs::msg::MagneticField> sh_mavros_magnetic_field_;
-  mrs_lib::SubscriberHandler<mavros_msgs::msg::RCIn> sh_mavros_rc_;
-  mrs_lib::SubscriberHandler<mavros_msgs::msg::Altitude> sh_mavros_altitude_;
-  mrs_lib::SubscriberHandler<mavros_msgs::msg::GPSRAW> sh_gps_status_raw_;
-  mrs_lib::SubscriberHandler<sensor_msgs::msg::BatteryState> sh_mavros_battery_;
+  mrs_lib::SubscriberHandler<mavros_msgs::msg::RCIn>          sh_mavros_rc_;
+  mrs_lib::SubscriberHandler<mavros_msgs::msg::Altitude>      sh_mavros_altitude_;
+  mrs_lib::SubscriberHandler<mavros_msgs::msg::GPSRAW>        sh_gps_status_raw_;
+  mrs_lib::SubscriberHandler<sensor_msgs::msg::BatteryState>  sh_mavros_battery_;
   /* mrs_lib::SubscriberHandler<mrs_modules_msgs::msg::Bestpos> sh_rtk_; */
 
   void callbackGroundTruth(const nav_msgs::msg::Odometry::ConstSharedPtr msg);
@@ -202,7 +202,7 @@ private:
 
   // | ----------------------- publishers ----------------------- |
 
-  mrs_lib::PublisherHandler<mavros_msgs::msg::AttitudeTarget> ph_mavros_attitude_target_;
+  mrs_lib::PublisherHandler<mavros_msgs::msg::AttitudeTarget>  ph_mavros_attitude_target_;
   mrs_lib::PublisherHandler<mavros_msgs::msg::ActuatorControl> ph_mavros_actuator_control_;
 
   // | ------------------------- timers ------------------------- |
@@ -215,10 +215,10 @@ private:
   // | ------------------------ variables ----------------------- |
 
   std::atomic<bool> offboard_ = false;
-  std::string mode_;
+  std::string       mode_;
   std::atomic<bool> armed_     = false;
   std::atomic<bool> connected_ = false;
-  std::mutex mutex_status_;
+  std::mutex        mutex_status_;
 
   template <class SubscriberHandler_T, typename CbkMsg_T, typename CbkTim_T>
   static void init_subscriber_handler(MrsUavPx4Api *this_ptr, SubscriberHandler_T &subscriber_handler, const mrs_lib::SubscriberHandlerOptions &options,
@@ -324,10 +324,7 @@ void MrsUavPx4Api::initialize(const rclcpp::Node::SharedPtr &node, std::shared_p
   // | --------------------- service server -------------------- |
   if (_simulation_) {
     ssh_ignore_ground_truth_ = mrs_lib::ServiceServerHandler<std_srvs::srv::SetBool>(
-        node_, "~/ignore_ground_truth_in",
-        [this](const auto &request, const auto &response) {
-          return this->callbackIgnoreGroundTruth(request, response);
-        },
+        node_, "~/ignore_ground_truth_in", [this](const auto &request, const auto &response) { return this->callbackIgnoreGroundTruth(request, response); },
         rclcpp::SystemDefaultsQoS(), cbkgrp_ss_);
   }
 
@@ -339,37 +336,37 @@ void MrsUavPx4Api::initialize(const rclcpp::Node::SharedPtr &node, std::shared_p
   mrs_lib::SubscriberHandlerOptions shopts;
   shopts.node                                = node_;
   shopts.node_name                           = "MrsHwPx4Api";
-  shopts.no_message_timeout                  = rclcpp::Duration::from_seconds(1.0); 
+  shopts.no_message_timeout                  = rclcpp::Duration::from_seconds(1.0);
   shopts.threadsafe                          = true;
   shopts.autostart                           = true;
   shopts.subscription_options.callback_group = callback_group_;
   shopts.qos                                 = qos_profile;
 
   if (_simulation_) {
-    init_subscriber_handler(this, sh_ground_truth_, shopts, "~/ground_truth_in", &MrsUavPx4Api::callbackGroundTruth,
-                            &MrsUavPx4Api::timeoutGeneralTopic, error_type_t::not_receiving_ground_truth, "Not receiving ground truth data");
+    init_subscriber_handler(this, sh_ground_truth_, shopts, "~/ground_truth_in", &MrsUavPx4Api::callbackGroundTruth, &MrsUavPx4Api::timeoutGeneralTopic,
+                            error_type_t::not_receiving_ground_truth, "Not receiving ground truth data");
   }
 
   /* if (!_simulation_) { */
   /* sh_rtk_ = mrs_lib::SubscriberHandler<mrs_modules_msgs::msg::Bestpos>(shopts, "rtk_in", &MrsUavPx4Api::callbackRTK, this); */
   /* } */
 
-  init_subscriber_handler(this, sh_mavros_state_, shopts, "~/mavros_state_in", &MrsUavPx4Api::callbackMavrosState,
-                          &MrsUavPx4Api::timeoutGeneralTopic, error_type_t::not_received_mavros_state, "Not receiving Mavros state messages");
+  init_subscriber_handler(this, sh_mavros_state_, shopts, "~/mavros_state_in", &MrsUavPx4Api::callbackMavrosState, &MrsUavPx4Api::timeoutGeneralTopic,
+                          error_type_t::not_received_mavros_state, "Not receiving Mavros state messages");
 
   sh_mavros_odometry_local_ =
       mrs_lib::SubscriberHandler<nav_msgs::msg::Odometry>(shopts, "~/mavros_local_position_in", &MrsUavPx4Api::callbackOdometryLocal, this);
 
   sh_mavros_odometry_in_ = mrs_lib::SubscriberHandler<nav_msgs::msg::Odometry>(shopts, "~/mavros_odometry_in", &MrsUavPx4Api::callbackOdometryIn, this);
 
-  init_subscriber_handler(this, sh_mavros_gps_, shopts, "~/mavros_global_position_in", &MrsUavPx4Api::callbackNavsatFix,
-                          &MrsUavPx4Api::timeoutGeneralTopic, error_type_t::not_receiving_gps, "Not receiving GPS data");
+  init_subscriber_handler(this, sh_mavros_gps_, shopts, "~/mavros_global_position_in", &MrsUavPx4Api::callbackNavsatFix, &MrsUavPx4Api::timeoutGeneralTopic,
+                          error_type_t::not_receiving_gps, "Not receiving GPS data");
 
   init_subscriber_handler(this, sh_mavros_distance_sensor_, shopts, "~/mavros_garmin_in", &MrsUavPx4Api::callbackDistanceSensor,
                           &MrsUavPx4Api::timeoutGeneralTopic, error_type_t::not_receiving_distance_sensor, "Not receiving distance sensor data");
 
-  init_subscriber_handler(this, sh_mavros_imu_, shopts, "~/mavros_imu_in", &MrsUavPx4Api::callbackImu,
-                          &MrsUavPx4Api::timeoutGeneralTopic, error_type_t::not_receiving_imu, "Not receiving IMU data");
+  init_subscriber_handler(this, sh_mavros_imu_, shopts, "~/mavros_imu_in", &MrsUavPx4Api::callbackImu, &MrsUavPx4Api::timeoutGeneralTopic,
+                          error_type_t::not_receiving_imu, "Not receiving IMU data");
 
   sh_mavros_magnetometer_heading_ =
       mrs_lib::SubscriberHandler<std_msgs::msg::Float64>(shopts, "~/mavros_magnetometer_in", &MrsUavPx4Api::callbackMagnetometer, this);
@@ -773,7 +770,7 @@ void MrsUavPx4Api::timeoutMavrosState(void) {
 /* timeoutGeneralTopic() //{ */
 
 void MrsUavPx4Api::timeoutGeneralTopic(const std::string &topic_name, const rclcpp::Time &last_msg_time, const error_type_t &error_type,
-                                     const std::string &error_description) {
+                                       const std::string &error_description) {
 
   if (!is_initialized_) {
     return;
@@ -1095,13 +1092,10 @@ void MrsUavPx4Api::callbackMagnetometer(const std_msgs::msg::Float64::ConstShare
     // Converting the value from MAVROS msg in degrees into radians for
     // consistency with other values.
     // Mavros yaw angle is given in degrees from 0.0..359.99 degrees
-    auto global_heading_rad =
-        mrs_lib::geometry::degrees::convert<mrs_lib::geometry::radians>(
-            msg->data);
+    auto global_heading_rad = mrs_lib::geometry::degrees::convert<mrs_lib::geometry::radians>(msg->data);
 
     // To be consistent with the local heading [-pi, pi]
-    auto sradians_heading =
-        global_heading_rad.convert<mrs_lib::geometry::sradians>();
+    auto sradians_heading = global_heading_rad.convert<mrs_lib::geometry::sradians>();
 
     mrs_msgs::msg::Float64Stamped mag_out;
     mag_out.header.stamp    = clock_->now();
