@@ -107,7 +107,7 @@ private:
   double _ref_lon;
   double _ref_utm_x;
   double _ref_utm_y;
-  bool _ref_latlon_init = false;
+  bool   _ref_latlon_init = false;
 
   // | --------------------- service clients -------------------- |
 
@@ -173,6 +173,12 @@ private:
   std::atomic<bool> armed_     = false;
   std::atomic<bool> connected_ = false;
   std::mutex        mutex_status_;
+
+  geometry_msgs::Quaternion orientation_;
+  std::mutex                mutex_orientation_;
+
+  geometry_msgs::Vector3 angular_velocity_;
+  std::mutex             mutex_angular_velocity_;
 };
 
 //}
@@ -695,6 +701,15 @@ void MrsUavPx4Api::callbackOdometryIn(const nav_msgs::Odometry::ConstPtr msg) {
 
   auto odom = msg;
 
+  {
+    std::scoped_lock lock(mutex_orientation_);
+    orientation_ = odom->pose.pose.orientation;
+  }
+  {
+    std::scoped_lock lock(mutex_angular_velocity_);
+    angular_velocity_ = odom->twist.twist.angular;
+  }
+
   // | ------------------- publish orientation ------------------ |
 
   if (_capabilities_.produces_orientation) {
@@ -720,7 +735,6 @@ void MrsUavPx4Api::callbackOdometryIn(const nav_msgs::Odometry::ConstPtr msg) {
 
     common_handlers_->publishers.publishAngularVelocity(angular_velocity);
   }
-
 }
 
 //}
@@ -735,29 +749,38 @@ void MrsUavPx4Api::callbackOdometryLocal(const nav_msgs::Odometry::ConstPtr msg)
 
   ROS_INFO_ONCE("[MrsUavPx4Api]: getting Mavros's local odometry");
 
-  auto odom = msg;
+  nav_msgs::Odometry odom = *msg;
+
+  {
+    std::scoped_lock lock(mutex_orientation_);
+    odom.pose.pose.orientation = orientation_ ;
+  }
+  {
+    std::scoped_lock lock(mutex_angular_velocity_);
+    odom.twist.twist.angular = angular_velocity_ ;
+  }
 
   // | -------------------- publish position -------------------- |
 
   geometry_msgs::PointStamped position;
 
-  position.header.stamp    = odom->header.stamp;
+  position.header.stamp    = msg->header.stamp;
   position.header.frame_id = _uav_name_ + "/" + _world_frame_name_;
-  position.point           = odom->pose.pose.position;
+  position.point           = msg->pose.pose.position;
 
   double lat, lon, correct_x, correct_y;
 
   if (_capabilities_.produces_position) {
-    
+
     if (_capabilities_.produces_gnss and _ref_latlon_init) {
 
       // The px4 Azimuthal Equidistant Projection of WGS84 is inconsistent with the UTM conversion is MRS system,
       // therefore, we convert it back to WGS84 frame and then convert correctly using mrs_lib.
-      
+
       // BEGIN PX4 CODE
-      const double x_rad = (double)odom->pose.pose.position.y / 6371000.0;
-      const double y_rad = (double)odom->pose.pose.position.x / 6371000.0;
-      const double c = sqrt(x_rad * x_rad + y_rad * y_rad);
+      const double x_rad = (double)msg->pose.pose.position.y / 6371000.0;
+      const double y_rad = (double)msg->pose.pose.position.x / 6371000.0;
+      const double c     = sqrt(x_rad * x_rad + y_rad * y_rad);
 
       if (fabs(c) > 0) {
         const double sin_c = sin(c);
@@ -785,7 +808,6 @@ void MrsUavPx4Api::callbackOdometryLocal(const nav_msgs::Odometry::ConstPtr msg)
 
       ROS_DEBUG("[MrsUavPx4Api]: position_px4_x: %f, position_px4_y: %f", position.point.x, position.point.y);
       ROS_DEBUG("[MrsUavPx4Api]: correct_mrs_x: %f, correct_mrs_y: %f", correct_x, correct_y);
-
     }
 
     common_handlers_->publishers.publishPosition(position);
@@ -797,9 +819,9 @@ void MrsUavPx4Api::callbackOdometryLocal(const nav_msgs::Odometry::ConstPtr msg)
 
     geometry_msgs::Vector3Stamped velocity;
 
-    velocity.header.stamp    = odom->header.stamp;
+    velocity.header.stamp    = msg->header.stamp;
     velocity.header.frame_id = _uav_name_ + "/" + _body_frame_name_;
-    velocity.vector          = odom->twist.twist.linear;
+    velocity.vector          = msg->twist.twist.linear;
 
     common_handlers_->publishers.publishVelocity(velocity);
   }
@@ -810,14 +832,14 @@ void MrsUavPx4Api::callbackOdometryLocal(const nav_msgs::Odometry::ConstPtr msg)
 
     if (_capabilities_.produces_gnss and _ref_latlon_init) {
 
-      auto odom_new = *odom;
+      auto odom_new                 = odom;
       odom_new.pose.pose.position.x = correct_x;
       odom_new.pose.pose.position.y = correct_y;
       common_handlers_->publishers.publishOdometry(odom_new);
 
     } else {
 
-      common_handlers_->publishers.publishOdometry(*odom);
+      common_handlers_->publishers.publishOdometry(odom);
     }
   }
 }
@@ -847,7 +869,6 @@ void MrsUavPx4Api::callbackNavsatFix(const sensor_msgs::NavSatFix::ConstPtr msg)
       mrs_lib::UTM(msg->latitude, msg->longitude, &_ref_utm_x, &_ref_utm_y);
       _ref_latlon_init = true;
     }
-
   }
 }
 
@@ -996,8 +1017,8 @@ void MrsUavPx4Api::callbackGpsStatusRaw(const mavros_msgs::GPSRAW::ConstPtr msg)
 
     mrs_msgs::GpsInfo gps_info_out;
 
-    gps_info_out.stamp = msg->header.stamp;  // [GPS_FIX_TYPE] GPS fix type
-    gps_info_out.fix_type = msg->fix_type;  // [GPS_FIX_TYPE] GPS fix type
+    gps_info_out.stamp    = msg->header.stamp;  // [GPS_FIX_TYPE] GPS fix type
+    gps_info_out.fix_type = msg->fix_type;      // [GPS_FIX_TYPE] GPS fix type
 
     gps_info_out.lat                = double(msg->lat) / 10000000;  // [deg] Latitude (WGS84, EGM96 ellipsoid)
     gps_info_out.lon                = double(msg->lon) / 10000000;  // [deg] Longitude (WGS84, EGM96 ellipsoid)
