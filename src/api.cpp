@@ -109,7 +109,7 @@ private:
   // | -------------------- errorgraph ------------------- |
   enum class error_type_t : uint16_t
   {
-    not_received_mavros_state,
+    not_receiving_mavros_state,
     not_receiving_ground_truth,
     not_receiving_rtk,
     not_receiving_gps,
@@ -219,6 +219,11 @@ private:
   std::atomic<bool> armed_     = false;
   std::atomic<bool> connected_ = false;
   std::mutex        mutex_status_;
+
+  std::mutex                     mutex_orientation_;
+  geometry_msgs::msg::Quaternion orientation_;
+  std::mutex                     mutex_angular_velocity_;
+  geometry_msgs::msg::Vector3    angular_velocity_;
 
   template <class SubscriberHandler_T, typename CbkMsg_T, typename CbkTim_T>
   static void init_subscriber_handler(MrsUavPx4Api *this_ptr, SubscriberHandler_T &subscriber_handler, const mrs_lib::SubscriberHandlerOptions &options,
@@ -352,7 +357,7 @@ void MrsUavPx4Api::initialize(const rclcpp::Node::SharedPtr &node, std::shared_p
   /* } */
 
   init_subscriber_handler(this, sh_mavros_state_, shopts, "~/mavros_state_in", &MrsUavPx4Api::callbackMavrosState, &MrsUavPx4Api::timeoutGeneralTopic,
-                          error_type_t::not_received_mavros_state, "Not receiving Mavros state messages");
+                          error_type_t::not_receiving_mavros_state, "Not receiving Mavros state messages");
 
   sh_mavros_odometry_local_ =
       mrs_lib::SubscriberHandler<nav_msgs::msg::Odometry>(shopts, "~/mavros_local_position_in", &MrsUavPx4Api::callbackOdometryLocal, this);
@@ -761,7 +766,7 @@ void MrsUavPx4Api::timeoutMavrosState(void) {
                          "If missing, the UAV could be disarmed by safety routines while not knowing it has switched to the MANUAL mode.");
   }
 
-  error_publisher_->addGeneralError(error_type_t::not_received_mavros_state, "Not receiving Mavros state");
+  error_publisher_->addGeneralError(error_type_t::not_receiving_mavros_state, "Not receiving Mavros state");
 }
 
 //}
@@ -863,11 +868,11 @@ void MrsUavPx4Api::callbackOdometryLocal(const nav_msgs::msg::Odometry::ConstSha
 
   {
     std::scoped_lock lock(mutex_orientation_);
-    odom.pose.pose.orientation = orientation_ ;
+    odom.pose.pose.orientation = orientation_;
   }
   {
     std::scoped_lock lock(mutex_angular_velocity_);
-    odom.twist.twist.angular = angular_velocity_ ;
+    odom.twist.twist.angular = angular_velocity_;
   }
 
   // | -------------------- publish position -------------------- |
@@ -890,7 +895,7 @@ void MrsUavPx4Api::callbackOdometryLocal(const nav_msgs::msg::Odometry::ConstSha
       // BEGIN PX4 CODE
       const double x_rad = (double)msg->pose.pose.position.y / 6371000.0;
       const double y_rad = (double)msg->pose.pose.position.x / 6371000.0;
-      const double c = sqrt(x_rad * x_rad + y_rad * y_rad);
+      const double c     = sqrt(x_rad * x_rad + y_rad * y_rad);
 
       if (fabs(c) > 0) {
         const double sin_c = sin(c);
@@ -942,7 +947,7 @@ void MrsUavPx4Api::callbackOdometryLocal(const nav_msgs::msg::Odometry::ConstSha
 
     if (_capabilities_.produces_gnss and _ref_latlon_init) {
 
-      auto odom_new = odom;
+      auto odom_new                 = odom;
       odom_new.pose.pose.position.x = correct_x;
       odom_new.pose.pose.position.y = correct_y;
       common_handlers_->publishers.publishOdometry(odom_new);
@@ -1323,6 +1328,10 @@ bool MrsUavPx4Api::callbackIgnoreGroundTruth(const std_srvs::srv::SetBool::Reque
   shopts.threadsafe                          = true;
   shopts.autostart                           = true;
   shopts.subscription_options.callback_group = callback_group_;
+
+  rclcpp::QoS qos_profile(10);
+  qos_profile.reliability(RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT);
+  shopts.qos = qos_profile;
 
 
   if (req->data) {
