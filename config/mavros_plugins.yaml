@@ -40,7 +40,7 @@ plugin_blacklist:
 - adsb
 # - debug_value
 - wind_estimation
-- log_transfer
+  #- log_transfer
 
 plugin_whitelist: []
 # 'sys_*'
