@@ -23,6 +23,7 @@
 #include <mrs_lib/errorgraph/error_publisher.h>
 
 #include <std_msgs/msg/float64.hpp>
+#include <std_msgs/msg/u_int8.hpp>
 
 #include <geometry_msgs/msg/quaternion_stamped.hpp>
 
@@ -1151,6 +1152,10 @@ void MrsUavPx4Api::callbackRC(const mavros_msgs::msg::RCIn::ConstSharedPtr msg) 
     }
 
     common_handlers_->publishers.publishRcChannels(rc_out);
+
+    std_msgs::msg::UInt8 rssi_out;
+    rssi_out.data = msg->rssi;
+    common_handlers_->publishers.publishRcRssi(rssi_out);
   }
 }
 
