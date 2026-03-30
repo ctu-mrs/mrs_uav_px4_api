@@ -134,8 +134,7 @@ private:
 
   double _mavros_timeout_;
   // Needs a default value
-  rclcpp::Duration _mavros_timeout_duration_ = rclcpp::Duration::from_seconds(0);
-  rclcpp::Duration _general_topic_timeout_   = rclcpp::Duration::from_seconds(1);
+  rclcpp::Duration _general_topic_timeout_ = rclcpp::Duration::from_seconds(1);
   double           _mavros_passable_delay_;
 
   bool _simulation_;
