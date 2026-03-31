@@ -135,6 +135,7 @@ def generate_launch_description():
                   ("~/mavros_set_mode_out", "mavros/set_mode"),
                   ("~/mavros_attitude_setpoint_out", "mavros/setpoint_raw/attitude"),
                   ("~/mavros_actuator_control_out", "mavros/actuator_control"),
+                  ("~/errors", "errors"),
 
                 ],
             )
