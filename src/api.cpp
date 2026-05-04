@@ -68,7 +68,7 @@ namespace mrs_uav_px4_api
 class MrsUavPx4Api : public mrs_uav_hw_api::MrsUavHwApi {
 
 public:
-  ~MrsUavPx4Api() {};
+  ~MrsUavPx4Api(){};
 
   void initialize(const rclcpp::Node::SharedPtr &node, std::shared_ptr<mrs_uav_hw_api::CommonHandlers_t> common_handlers);
 
