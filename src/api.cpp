@@ -23,6 +23,7 @@
 #include <mrs_lib/errorgraph/error_publisher.h>
 
 #include <std_msgs/msg/float64.hpp>
+#include <std_msgs/msg/u_int8.hpp>
 
 #include <geometry_msgs/msg/quaternion_stamped.hpp>
 
@@ -307,6 +308,7 @@ void MrsUavPx4Api::initialize(const rclcpp::Node::SharedPtr &node, std::shared_p
   local_param_loader.loadParam("outputs/magnetometer_heading", (bool &)_capabilities_.produces_magnetometer_heading);
   local_param_loader.loadParam("outputs/magnetic_field", (bool &)_capabilities_.produces_magnetic_field);
   local_param_loader.loadParam("outputs/rc_channels", (bool &)_capabilities_.produces_rc_channels);
+  local_param_loader.loadParam("outputs/rc_rssi", (bool &)_capabilities_.produces_rc_rssi);
   local_param_loader.loadParam("outputs/battery_state", (bool &)_capabilities_.produces_battery_state);
   local_param_loader.loadParam("outputs/position", (bool &)_capabilities_.produces_position);
   local_param_loader.loadParam("outputs/orientation", (bool &)_capabilities_.produces_orientation);
@@ -1151,6 +1153,13 @@ void MrsUavPx4Api::callbackRC(const mavros_msgs::msg::RCIn::ConstSharedPtr msg) 
     }
 
     common_handlers_->publishers.publishRcChannels(rc_out);
+  }
+
+  if (_capabilities_.produces_rc_rssi) {
+    mrs_msgs::msg::HwApiRcRssi rssi_out;
+    rssi_out.stamp = msg->header.stamp;
+    rssi_out.rssi  = msg->rssi;
+    common_handlers_->publishers.publishRcRssi(rssi_out);
   }
 }
 
