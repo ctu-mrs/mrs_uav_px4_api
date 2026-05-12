@@ -70,6 +70,6 @@
       - distance_sensor
       - gps_input
       - gps_rtk
-      # - gps_status
+      - gps_status
       - mag_calibration_status
       - odometry
