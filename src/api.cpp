@@ -20,6 +20,7 @@
 #include <mrs_lib/service_server_handler.h>
 #include <mrs_lib/gps_conversions.h>
 #include <mrs_lib/geometry/cyclic.h>
+#include <mrs_lib/geometry/misc.h>
 #include <mrs_lib/errorgraph/error_publisher.h>
 
 #include <std_msgs/msg/float64.hpp>
@@ -1095,18 +1096,15 @@ void MrsUavPx4Api::callbackMagnetometer(const std_msgs::msg::Float64::ConstShare
 
   if (_capabilities_.produces_magnetometer_heading) {
 
-    // Converting the value from MAVROS msg in degrees into radians for
-    // consistency with other values.
-    // Mavros yaw angle is given in degrees from 0.0..359.99 degrees
-    auto global_heading_rad = mrs_lib::geometry::degrees::convert<mrs_lib::geometry::radians>(msg->data);
-
-    // To be consistent with the local heading [-pi, pi]
-    auto sradians_heading = global_heading_rad.convert<mrs_lib::geometry::sradians>();
+    // Converting the value from MAVROS msg in NED degrees into ENU radians for consistency with other values.
+    // The Mavros heading angle is given in degrees from 0.0 to 359.99 degrees in the North-East-Down coordinate frame.
+    const auto global_heading_ned = mrs_lib::geometry::degrees::convert<mrs_lib::geometry::sradians>(msg->data).value();
+    const auto global_heading_enu = mrs_lib::geometry::headingNEDtoENU(global_heading_ned);
 
     mrs_msgs::msg::Float64Stamped mag_out;
     mag_out.header.stamp    = clock_->now();
     mag_out.header.frame_id = _uav_name_ + "/" + _world_frame_name_;
-    mag_out.value           = sradians_heading.value();
+    mag_out.value           = global_heading_enu;
 
     common_handlers_->publishers.publishMagnetometerHeading(mag_out);
   }
