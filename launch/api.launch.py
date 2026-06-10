@@ -2,6 +2,7 @@
 
 import launch
 import os
+import sys
 
 from launch_ros.actions import ComposableNodeContainer, Node
 from launch_ros.descriptions import ComposableNode
@@ -93,8 +94,9 @@ def generate_launch_description():
         namespace=namespace,
         name=namespace+'_container',
         package='rclcpp_components',
-        executable='component_container_mt',
+        executable='component_container',
         output='screen',
+        prefix='debug_roslaunch ' + os.ttyname(sys.stdout.fileno()),
 
         composable_node_descriptions=[
 
