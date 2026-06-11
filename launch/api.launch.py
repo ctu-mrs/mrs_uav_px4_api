@@ -96,7 +96,7 @@ def generate_launch_description():
         package='rclcpp_components',
         executable='component_container',
         output='screen',
-        prefix='debug_roslaunch ' + os.ttyname(sys.stdout.fileno()),
+        # prefix='debug_roslaunch ' + os.ttyname(sys.stdout.fileno()),
 
         composable_node_descriptions=[
 
