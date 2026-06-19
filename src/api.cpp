@@ -102,8 +102,8 @@ public:
 
   // | -------------------- service callbacks ------------------- |
 
-  mrs_lib::Task<std::tuple<bool, std::string>> callbackArming(const bool &request);
-  mrs_lib::Task<std::tuple<bool, std::string>> callbackOffboard(void);
+  std::tuple<bool, std::string> callbackArming(const bool &request);
+  std::tuple<bool, std::string> callbackOffboard(void);
 
 private:
   bool is_initialized_ = false;
@@ -627,7 +627,7 @@ void MrsUavPx4Api::callbackTrackerCmd([[maybe_unused]] const mrs_msgs::msg::Trac
 
 /* callbackArming() //{ */
 
-mrs_lib::Task<std::tuple<bool, std::string>> MrsUavPx4Api::callbackArming([[maybe_unused]] const bool &request) {
+std::tuple<bool, std::string> MrsUavPx4Api::callbackArming([[maybe_unused]] const bool &request) {
 
   std::stringstream ss;
 
@@ -639,7 +639,7 @@ mrs_lib::Task<std::tuple<bool, std::string>> MrsUavPx4Api::callbackArming([[mayb
     ss << "can not arm by service when not in simulation! You should arm the drone by the RC controller only!";
     RCLCPP_ERROR_STREAM_THROTTLE(node_->get_logger(), *clock_, 1000, "" << ss.str());
 
-    co_return {false, ss.str()};
+    return {false, ss.str()};
   }
 
   srv_out->broadcast    = false;
@@ -658,7 +658,7 @@ mrs_lib::Task<std::tuple<bool, std::string>> MrsUavPx4Api::callbackArming([[mayb
 
   bool success = false;
 
-  auto response = co_await sch_mavros_command_long_.callAwaitable(srv_out);
+  auto response = sch_mavros_command_long_.callSync(srv_out);
 
   if (response) {
 
@@ -681,14 +681,14 @@ mrs_lib::Task<std::tuple<bool, std::string>> MrsUavPx4Api::callbackArming([[mayb
     RCLCPP_ERROR(node_->get_logger(), "%s", ss.str().c_str());
   }
 
-  co_return {success, ss.str()};
+  return {success, ss.str()};
 }
 
 //}
 
 /* callbackOffboard() //{ */
 
-mrs_lib::Task<std::tuple<bool, std::string>> MrsUavPx4Api::callbackOffboard(void) {
+std::tuple<bool, std::string> MrsUavPx4Api::callbackOffboard(void) {
 
   std::stringstream ss;
 
@@ -699,7 +699,7 @@ mrs_lib::Task<std::tuple<bool, std::string>> MrsUavPx4Api::callbackOffboard(void
 
   bool success = false;
 
-  auto response = co_await sch_mavros_mode_.callAwaitable(srv_out);
+  auto response = sch_mavros_mode_.callSync(srv_out);
 
   if (response) {
 
@@ -720,7 +720,7 @@ mrs_lib::Task<std::tuple<bool, std::string>> MrsUavPx4Api::callbackOffboard(void
     RCLCPP_ERROR_THROTTLE(node_->get_logger(), *clock_, 1000, "%s", ss.str().c_str());
   }
 
-  co_return {success, ss.str()};
+  return {success, ss.str()};
 }
 
 //}
