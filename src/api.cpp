@@ -146,13 +146,14 @@ private:
   std::string _sim_rtk_utm_zone_;
   double      _sim_rtk_amsl_;
 
-  double _ref_sin_lat;
-  double _ref_cos_lat;
-  double _ref_lat;
-  double _ref_lon;
-  double _ref_utm_x;
-  double _ref_utm_y;
-  bool   _ref_latlon_init = false;
+  std::mutex mutex_ref_latlon_;
+  double     _ref_sin_lat;
+  double     _ref_cos_lat;
+  double     _ref_lat;
+  double     _ref_lon;
+  double     _ref_utm_x;
+  double     _ref_utm_y;
+  bool       _ref_latlon_init = false;
 
   // | --------------------- service clients -------------------- |
 
@@ -341,13 +342,12 @@ void MrsUavPx4Api::initialize(const rclcpp::Node::SharedPtr &node, std::shared_p
   qos_profile.reliability(RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT);
 
   mrs_lib::SubscriberHandlerOptions shopts;
-  shopts.node                                = node_;
-  shopts.node_name                           = "MrsHwPx4Api";
-  shopts.no_message_timeout                  = rclcpp::Duration::from_seconds(1.0);
-  shopts.threadsafe                          = true;
-  shopts.autostart                           = true;
-  shopts.subscription_options.callback_group = callback_group_;
-  shopts.qos                                 = qos_profile;
+  shopts.node              = node_;
+  shopts.node_name         = "MrsHwPx4Api";
+  shopts.no_message_timeout = rclcpp::Duration::from_seconds(1.0);
+  shopts.threadsafe        = true;
+  shopts.autostart         = true;
+  shopts.qos               = qos_profile;
 
   if (_simulation_) {
     init_subscriber_handler(this, sh_ground_truth_, shopts, "~/ground_truth_in", &MrsUavPx4Api::callbackGroundTruth, &MrsUavPx4Api::timeoutGeneralTopic,
@@ -887,9 +887,22 @@ void MrsUavPx4Api::callbackOdometryLocal(const nav_msgs::msg::Odometry::ConstSha
 
   double lat, lon, correct_x, correct_y;
 
+  bool   ref_latlon_init;
+  double ref_sin_lat, ref_cos_lat, ref_lat, ref_lon, ref_utm_x, ref_utm_y;
+  {
+    std::scoped_lock lock(mutex_ref_latlon_);
+    ref_latlon_init = _ref_latlon_init;
+    ref_sin_lat     = _ref_sin_lat;
+    ref_cos_lat     = _ref_cos_lat;
+    ref_lat         = _ref_lat;
+    ref_lon         = _ref_lon;
+    ref_utm_x       = _ref_utm_x;
+    ref_utm_y       = _ref_utm_y;
+  }
+
   if (_capabilities_.produces_position) {
 
-    if (_capabilities_.produces_gnss and _ref_latlon_init) {
+    if (_capabilities_.produces_gnss and ref_latlon_init) {
 
       // The px4 Azimuthal Equidistant Projection of WGS84 is inconsistent with the UTM conversion is MRS system,
       // therefore, we convert it back to WGS84 frame and then convert correctly using mrs_lib.
@@ -903,22 +916,22 @@ void MrsUavPx4Api::callbackOdometryLocal(const nav_msgs::msg::Odometry::ConstSha
         const double sin_c = sin(c);
         const double cos_c = cos(c);
 
-        const double lat_rad = asin(cos_c * _ref_sin_lat + (x_rad * sin_c * _ref_cos_lat) / c);
-        const double lon_rad = (_ref_lon + atan2(y_rad * sin_c, c * _ref_cos_lat * cos_c - x_rad * _ref_sin_lat * sin_c));
+        const double lat_rad = asin(cos_c * ref_sin_lat + (x_rad * sin_c * ref_cos_lat) / c);
+        const double lon_rad = (ref_lon + atan2(y_rad * sin_c, c * ref_cos_lat * cos_c - x_rad * ref_sin_lat * sin_c));
 
         lat = RAD2DEG(lat_rad);
         lon = RAD2DEG(lon_rad);
 
       } else {
-        lat = RAD2DEG(_ref_lat);
-        lon = RAD2DEG(_ref_lon);
+        lat = RAD2DEG(ref_lat);
+        lon = RAD2DEG(ref_lon);
       }
       // END PX4 CODE
 
       mrs_lib::UTM(lat, lon, &correct_x, &correct_y);
 
-      correct_x = correct_x - _ref_utm_x;
-      correct_y = correct_y - _ref_utm_y;
+      correct_x = correct_x - ref_utm_x;
+      correct_y = correct_y - ref_utm_y;
 
       position.point.x = correct_x;
       position.point.y = correct_y;
@@ -947,7 +960,7 @@ void MrsUavPx4Api::callbackOdometryLocal(const nav_msgs::msg::Odometry::ConstSha
 
   if (_capabilities_.produces_odometry) {
 
-    if (_capabilities_.produces_gnss and _ref_latlon_init) {
+    if (_capabilities_.produces_gnss and ref_latlon_init) {
 
       auto odom_new                 = odom;
       odom_new.pose.pose.position.x = correct_x;
@@ -1029,10 +1042,11 @@ void MrsUavPx4Api::callbackNavsatFix(const sensor_msgs::msg::NavSatFix::ConstSha
 
     if (!_ref_latlon_init) {
 
-      _ref_lat     = DEG2RAD(msg->latitude);
-      _ref_lon     = DEG2RAD(msg->longitude);
-      _ref_sin_lat = sin(_ref_lat);
-      _ref_cos_lat = cos(_ref_lat);
+      std::scoped_lock lock(mutex_ref_latlon_);
+      _ref_lat         = DEG2RAD(msg->latitude);
+      _ref_lon         = DEG2RAD(msg->longitude);
+      _ref_sin_lat     = sin(_ref_lat);
+      _ref_cos_lat     = cos(_ref_lat);
       mrs_lib::UTM(msg->latitude, msg->longitude, &_ref_utm_x, &_ref_utm_y);
       _ref_latlon_init = true;
     }
@@ -1328,12 +1342,11 @@ void MrsUavPx4Api::callbackGroundTruth(const nav_msgs::msg::Odometry::ConstShare
 
 bool MrsUavPx4Api::callbackIgnoreGroundTruth(const std_srvs::srv::SetBool::Request::SharedPtr req, std_srvs::srv::SetBool::Response::SharedPtr resp) {
   mrs_lib::SubscriberHandlerOptions shopts;
-  shopts.node                                = node_;
-  shopts.node_name                           = "MrsHwPx4Api";
-  shopts.no_message_timeout                  = rclcpp::Duration::from_seconds(1.0);
-  shopts.threadsafe                          = true;
-  shopts.autostart                           = true;
-  shopts.subscription_options.callback_group = callback_group_;
+  shopts.node               = node_;
+  shopts.node_name          = "MrsHwPx4Api";
+  shopts.no_message_timeout = rclcpp::Duration::from_seconds(1.0);
+  shopts.threadsafe         = true;
+  shopts.autostart          = true;
 
   rclcpp::QoS qos_profile(10);
   qos_profile.reliability(RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT);
