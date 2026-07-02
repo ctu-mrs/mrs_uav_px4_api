@@ -39,7 +39,7 @@ def generate_launch_description():
     ld.add_action(ComposableNodeContainer(
 
         namespace=namespace,
-        name='mavros_container',
+        name='mavros',
         package='rclcpp_components',
         executable='component_container_events_cbg',
         output='screen',
