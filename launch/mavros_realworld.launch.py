@@ -5,6 +5,7 @@ import os
 
 from launch_ros.actions import ComposableNodeContainer, Node
 from launch_ros.descriptions import ComposableNode
+from launch_ros.parameter_descriptions import ParameterFile
 
 from ament_index_python.packages import get_package_share_directory
 
@@ -72,8 +73,8 @@ def generate_launch_description():
                     {'target_system_id': 1},
                     {'target_component_id': 1},
                     {'fcu_protocol': 'v2.0'},
-                    this_pkg_path + '/config/mavros_plugins.yaml',
-                    this_pkg_path + f'/config/mavros_px4_config{("_old_fw" if OLD_PX4_FW else "")}.yaml',
+                    ParameterFile(this_pkg_path + '/config/mavros_plugins.yaml', allow_substs=True),
+                    ParameterFile(this_pkg_path + f'/config/mavros_px4_config{("_old_fw" if OLD_PX4_FW else "")}.yaml', allow_substs=True),
 
                 ],
             ),
