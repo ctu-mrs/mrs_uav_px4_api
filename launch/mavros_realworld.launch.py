@@ -32,19 +32,13 @@ def generate_launch_description():
 
     # #} end of args from ENV
 
-    tgt_system = 1
     namespace = uav_name
-
-    # the mavlink_router <-> uas bridge topics are global (not pushed under the node
-    # namespace) by mavros' design, so give each vehicle its own prefix here instead of
-    # relying on mavros_node's default of "/uas<tgt_system>", which collides across vehicles
-    # that share tgt_system and pollutes the global topic namespace
     uas_url = f'/{uav_name}/mavlink'
 
     ld.add_action(ComposableNodeContainer(
 
         namespace=namespace,
-        name=namespace + '_mavros_container',
+        name='mavros_container',
         package='rclcpp_components',
         executable='component_container_events_cbg',
         output='screen',
@@ -56,7 +50,7 @@ def generate_launch_description():
                 package='mavros',
                 plugin='mavros::router::Router',
                 namespace=namespace + '/mavros',
-                name='mavros_router',
+                name='router',
                 parameters=[
 
                     {'fcu_urls': [fcu_url]},
@@ -71,11 +65,11 @@ def generate_launch_description():
                 package='mavros',
                 plugin='mavros::uas::UAS',
                 namespace=namespace + '/mavros',
-                name='mavros',
+                name='uas',
                 parameters=[
 
                     {'uas_url': uas_url},
-                    {'target_system_id': tgt_system},
+                    {'target_system_id': 1},
                     {'target_component_id': 1},
                     {'fcu_protocol': 'v2.0'},
                     this_pkg_path + '/config/mavros_plugins.yaml',
