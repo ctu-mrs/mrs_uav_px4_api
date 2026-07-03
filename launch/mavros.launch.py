@@ -28,6 +28,7 @@ def generate_launch_description():
     config_yaml = LaunchConfiguration('config_yaml')
     use_sim_time = LaunchConfiguration('use_sim_time')
     use_default_garmin_tf = LaunchConfiguration('use_default_garmin_tf')
+    frame_id_namespace = LaunchConfiguration('frame_id_namespace')
 
     OLD_PX4_FW = os.getenv('OLD_PX4_FW', 'false') == 'true'
     PX4_IP = os.getenv('PX4_IP', '')
@@ -74,6 +75,12 @@ def generate_launch_description():
         description='Whether to use the default Garmin TF transform',
     ))
 
+    ld.add_action(DeclareLaunchArgument(
+        'frame_id_namespace',
+        default_value='',
+        description='Namespace for frame IDs',
+    ))
+
     gcs_url = 'tcp-l://'
 
     # #} end of args from ENV
@@ -91,9 +98,9 @@ def generate_launch_description():
             {"fcu_protocol": 'v2.0'},
             {"use_sim_time": use_sim_time},
 
-            {"base_link_frame_id": 'base_link'},
-            {"odom_frame_id": 'odom'},
-            {"map_frame_id": 'map'},
+            {"base_link_frame_id": [frame_id_namespace, '/base_link']},
+            {"odom_frame_id": [frame_id_namespace, '/odom']},
+            {"map_frame_id": [frame_id_namespace, '/map']},
 
             ParameterFile(this_pkg_path + '/config/mavros_plugins.yaml', allow_substs=True),
             ParameterFile(config_yaml, allow_substs=True),
