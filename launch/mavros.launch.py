@@ -91,9 +91,9 @@ def generate_launch_description():
             {"fcu_protocol": 'v2.0'},
             {"use_sim_time": use_sim_time},
 
-            {"base_link_frame_id": '/base_link'},
-            {"odom_frame_id": '/odom'},
-            {"map_frame_id": '/map'},
+            {"base_link_frame_id": 'base_link'},
+            {"odom_frame_id": 'odom'},
+            {"map_frame_id": 'map'},
 
             ParameterFile(this_pkg_path + '/config/mavros_plugins.yaml', allow_substs=True),
             ParameterFile(config_yaml, allow_substs=True),
