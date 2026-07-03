@@ -58,7 +58,7 @@ def generate_launch_description():
 
     ld.add_action(DeclareLaunchArgument(
         'config_yaml',
-        default_value=os.path.join(this_pkg_path, f'/config/mavros_px4_config{("_old_fw" if OLD_PX4_FW else "")}.yaml'),
+        default_value=os.path.join(this_pkg_path, 'config', f'mavros_px4_config{("_old_fw" if OLD_PX4_FW else "")}.yaml'),
         description='Path to the MAVROS PX4 config YAML file',
     ))
 
