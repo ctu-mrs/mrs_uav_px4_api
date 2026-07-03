@@ -4,9 +4,9 @@ import launch
 import os
 
 from launch.actions import DeclareLaunchArgument
-from launch_ros.actions import ComposableNodeContainer, Node
-from launch_ros.descriptions import ComposableNode
-from launch_ros.parameter_descriptions import ParameterFile, ParameterValue
+from launch_ros.actions import Node
+from launch.conditions import IfCondition 
+from launch_ros.parameter_descriptions import ParameterFile
 from launch.substitutions import LaunchConfiguration
 
 from ament_index_python.packages import get_package_share_directory
@@ -27,6 +27,7 @@ def generate_launch_description():
     tgt_system = LaunchConfiguration('tgt_system')
     config_yaml = LaunchConfiguration('config_yaml')
     use_sim_time = LaunchConfiguration('use_sim_time')
+    use_default_garmin_tf = LaunchConfiguration('use_default_garmin_tf')
 
     OLD_PX4_FW = os.getenv('OLD_PX4_FW', 'false') == 'true'
     PX4_IP = os.getenv('PX4_IP', '')
@@ -67,6 +68,12 @@ def generate_launch_description():
         description='Target system ID for MAVROS',
     ))
 
+    ld.add_action(DeclareLaunchArgument(
+        'use_default_garmin_tf',
+        default_value='true',
+        description='Whether to use the default Garmin TF transform',
+    ))
+
     gcs_url = 'tcp-l://'
 
     # #} end of args from ENV
@@ -97,5 +104,16 @@ def generate_launch_description():
             (['/uas', tgt_system, '/mavlink_sink'], 'mavlink_sink'),
         ]
     ))
+
+    ld.add_action(
+        Node(
+            package='tf2_ros',
+            namespace='',
+            executable='static_transform_publisher',
+            name='fcu_to_garmin',
+            arguments=['0.0', '0.0625', '-0.009', '0', '1.5708', '-1.5708', [UAV_NAME, '/fcu'], [UAV_NAME, '/garmin']],
+            condition=IfCondition(use_default_garmin_tf)
+        )
+    )
 
     return ld
