@@ -24,6 +24,7 @@ def generate_launch_description():
     UAV_NAME = LaunchConfiguration('uav_name')
 
     fcu_url = LaunchConfiguration('fcu_url')
+    tgt_system = LaunchConfiguration('tgt_system')
     config_yaml = LaunchConfiguration('config_yaml')
     use_sim_time = LaunchConfiguration('use_sim_time')
 
@@ -60,8 +61,13 @@ def generate_launch_description():
         description='Path to the MAVROS PX4 config YAML file',
     ))
 
-    # gcs_url = 'tcp-l://'
-    gcs_url = ''  # do not connect to QGC using mavros, we create a dedicated mavlink stream instead
+    ld.add_action(DeclareLaunchArgument(
+        'tgt_system',
+        default_value="1",
+        description='Target system ID for MAVROS',
+    ))
+
+    gcs_url = 'tcp-l://'
 
     # #} end of args from ENV
 
@@ -73,7 +79,7 @@ def generate_launch_description():
         parameters=[
             {"fcu_url": fcu_url},
             {"gcs_url": gcs_url},
-            {"tgt_system": 1},
+            {"tgt_system": tgt_system},
             {"tgt_component": 1},
             {"fcu_protocol": 'v2.0'},
             {"use_sim_time": use_sim_time},
@@ -82,24 +88,14 @@ def generate_launch_description():
             {"odom_frame_id": [UAV_NAME, '/odom']},
             {"map_frame_id": [UAV_NAME, '/map']},
 
-            {"pluginlists_yaml": this_pkg_path + '/config/mavros_plugins.yaml'},
-            {"config_yaml": config_yaml},
+            ParameterFile(this_pkg_path + '/config/mavros_plugins.yaml', allow_substs=True),
+            ParameterFile(config_yaml, allow_substs=True),
         ],
         remappings=[
             ('/diagnostics', 'diagnostics'),
-            ('/uas1/mavlink_source', 'mavlink_source'),
-            ('/uas1/mavlink_sink', 'mavlink_sink'),
+            (['/uas', tgt_system, '/mavlink_source'], 'mavlink_source'),
+            (['/uas', tgt_system, '/mavlink_sink'], 'mavlink_sink'),
         ]
     ))
-
-    ld.add_action(
-        Node(
-            package='tf2_ros',
-            namespace='',
-            executable='static_transform_publisher',
-            name='fcu_to_garmin',
-            arguments=['0.0', '0.0', '-0.05', '0', '1.57', '0', [UAV_NAME, '/fcu'], 'garmin'],
-        )
-    )
 
     return ld
