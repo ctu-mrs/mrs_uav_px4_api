@@ -107,8 +107,8 @@ def generate_launch_description():
         ],
         remappings=[
             ('/diagnostics', 'diagnostics'),
-            (['/uas', tgt_system, '/mavlink_source'], 'mavlink_source'),
-            (['/uas', tgt_system, '/mavlink_sink'], 'mavlink_sink'),
+            (['/uas', tgt_system, '/mavlink_source'], 'mavlink/source'),
+            (['/uas', tgt_system, '/mavlink_sink'], 'mavlink/sink'),
         ]
     ))
 
