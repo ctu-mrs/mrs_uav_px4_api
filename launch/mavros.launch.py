@@ -104,7 +104,16 @@ def generate_launch_description():
         namespace="",
         executable="static_transform_publisher",
         name="fcu_to_garmin",
-        arguments=["0.0", "0.0625", "-0.009", "0", "1.5708", "-1.5708", [uav_name, "/fcu"], [uav_name, "/garmin"]],
+        arguments=[
+            "--x", "0.0",
+            "--y", "0.0625",
+            "--z", "-0.009",
+            "--roll", "0",
+            "--pitch", "1.5708",
+            "--yaw", "-1.5708",
+            "--frame-id", [uav_name, "/fcu"],
+            "--child-frame-id", [uav_name, "/garmin"],
+        ],
         condition=IfCondition(use_default_garmin_tf),
     )
 
