@@ -37,6 +37,8 @@
 #include <mavros_msgs/msg/actuator_control.hpp>
 #include <mavros_msgs/msg/gpsraw.hpp>
 
+#include <format>
+#include <string>
 //}
 
 /* defines //{ */
@@ -196,8 +198,6 @@ private:
   /* void                                                 callbackRTK(const mrs_modules_msgs::msg::Bestpos::ConstSharedPtr msg); */
 
   void timeoutMavrosState(void);
-  void timeoutGeneralTopic(const std::string &topic_name, const rclcpp::Time &last_msg_time, const error_type_t &error_type,
-                           const std::string &error_description);
 
   double RCChannelToRange(const double &rc_value);
 
@@ -226,14 +226,18 @@ private:
   std::mutex                     mutex_angular_velocity_;
   geometry_msgs::msg::Vector3    angular_velocity_;
 
-  template <class SubscriberHandler_T, typename CbkMsg_T, typename CbkTim_T>
+  template <class SubscriberHandler_T, typename CbkMsg_T>
   static void init_subscriber_handler(MrsUavPx4Api *this_ptr, SubscriberHandler_T &subscriber_handler, const mrs_lib::SubscriberHandlerOptions &options,
-                                      const std::string &topic, CbkMsg_T cbk_msg, CbkTim_T cbk_tim, error_type_t error_type, const std::string &error_msg) {
+                                      const std::string &topic, CbkMsg_T cbk_msg, error_type_t error_type, const std::string &error_msg) {
     const typename SubscriberHandler_T::message_callback_t message_callback = [this_ptr, cbk_msg](const auto &msg) { (this_ptr->*cbk_msg)(msg); };
 
-    const typename SubscriberHandler_T::timeout_callback_t timeout_callback = [this_ptr, cbk_tim, error_type, error_msg](const auto &topic_name,
-                                                                                                                         const auto &last_message) {
-      (this_ptr->*cbk_tim)(topic_name, last_message, error_type, error_msg);
+    const typename SubscriberHandler_T::timeout_callback_t timeout_callback = [this_ptr, sh = &subscriber_handler, error_type,
+                                                                               error_msg]([[maybe_unused]] const auto &topic_name, const auto &last_msg) {
+      const rclcpp::Duration since_msg = this_ptr->clock_->now() - last_msg;
+      RCLCPP_WARN_STREAM(this_ptr->node_->get_logger(), "Did not receive any message from topic '" << sh->topicName() << "' for " << since_msg.seconds()
+                                                                                                   << "s (" << sh->getNumPublishers()
+                                                                                                   << " publishers on this topic)");
+      this_ptr->error_publisher_->addGeneralError(error_type, error_msg);
     };
 
     subscriber_handler = SubscriberHandler_T(options, topic, timeout_callback, message_callback);
@@ -350,30 +354,29 @@ void MrsUavPx4Api::initialize(const rclcpp::Node::SharedPtr &node, std::shared_p
   shopts.qos                                 = qos_profile;
 
   if (_simulation_) {
-    init_subscriber_handler(this, sh_ground_truth_, shopts, "~/ground_truth_in", &MrsUavPx4Api::callbackGroundTruth, &MrsUavPx4Api::timeoutGeneralTopic,
-                            error_type_t::not_receiving_ground_truth, "Not receiving ground truth data");
+    sh_ground_truth_ = mrs_lib::SubscriberHandler<nav_msgs::msg::Odometry>(shopts, "~/ground_truth_in", &MrsUavPx4Api::callbackGroundTruth, this);
   }
 
   /* if (!_simulation_) { */
   /* sh_rtk_ = mrs_lib::SubscriberHandler<mrs_modules_msgs::msg::Bestpos>(shopts, "rtk_in", &MrsUavPx4Api::callbackRTK, this); */
   /* } */
 
-  init_subscriber_handler(this, sh_mavros_state_, shopts, "~/mavros_state_in", &MrsUavPx4Api::callbackMavrosState, &MrsUavPx4Api::timeoutGeneralTopic,
-                          error_type_t::not_receiving_mavros_state, "Not receiving Mavros state messages");
+  init_subscriber_handler(this, sh_mavros_state_, shopts, "~/mavros_state_in", &MrsUavPx4Api::callbackMavrosState, error_type_t::not_receiving_mavros_state,
+                          "Not receiving Mavros state messages");
 
   sh_mavros_odometry_local_ =
       mrs_lib::SubscriberHandler<nav_msgs::msg::Odometry>(shopts, "~/mavros_local_position_in", &MrsUavPx4Api::callbackOdometryLocal, this);
 
   sh_mavros_odometry_in_ = mrs_lib::SubscriberHandler<nav_msgs::msg::Odometry>(shopts, "~/mavros_odometry_in", &MrsUavPx4Api::callbackOdometryIn, this);
 
-  init_subscriber_handler(this, sh_mavros_gps_, shopts, "~/mavros_global_position_in", &MrsUavPx4Api::callbackNavsatFix, &MrsUavPx4Api::timeoutGeneralTopic,
-                          error_type_t::not_receiving_gps, "Not receiving GPS data");
+  init_subscriber_handler(this, sh_mavros_gps_, shopts, "~/mavros_global_position_in", &MrsUavPx4Api::callbackNavsatFix, error_type_t::not_receiving_gps,
+                          "Not receiving GPS data");
 
   init_subscriber_handler(this, sh_mavros_distance_sensor_, shopts, "~/mavros_garmin_in", &MrsUavPx4Api::callbackDistanceSensor,
-                          &MrsUavPx4Api::timeoutGeneralTopic, error_type_t::not_receiving_distance_sensor, "Not receiving distance sensor data");
+                          error_type_t::not_receiving_distance_sensor, "Not receiving distance sensor data");
 
-  init_subscriber_handler(this, sh_mavros_imu_, shopts, "~/mavros_imu_in", &MrsUavPx4Api::callbackImu, &MrsUavPx4Api::timeoutGeneralTopic,
-                          error_type_t::not_receiving_imu, "Not receiving IMU data");
+  init_subscriber_handler(this, sh_mavros_imu_, shopts, "~/mavros_imu_in", &MrsUavPx4Api::callbackImu, error_type_t::not_receiving_imu,
+                          "Not receiving IMU data");
 
   sh_mavros_magnetometer_heading_ =
       mrs_lib::SubscriberHandler<std_msgs::msg::Float64>(shopts, "~/mavros_magnetometer_in", &MrsUavPx4Api::callbackMagnetometer, this);
@@ -754,11 +757,17 @@ void MrsUavPx4Api::timeoutMavrosState(void) {
       mode_      = "";
     }
 
-    RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 1000, "Have not received Mavros state for more than '%.3f s'", time.seconds());
+    RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 1000, "Did not receive Mavros state for more than '%.3f s'", time.seconds());
+
+    const std::string error_msg = std::format("Not receiving Mavros state for more than '{:.3f} s'", time.seconds());
+    error_publisher_->addGeneralError(error_type_t::not_receiving_mavros_state, error_msg.c_str());
+    return;
   }
 
   if (time.seconds() > _mavros_passable_delay_) {
 
+    RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 1000,
+                         "--------------------------------------------------------------------------------------------------------------");
     RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 1000, "Not receiving Mavros state message for '%.3f s'! Setup the PixHawk SD card!!", time.seconds());
     RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 1000,
                          "This could be also caused by the not being PixHawk booted properly due to, e.g., antispark connector jerkiness.");
@@ -766,30 +775,11 @@ void MrsUavPx4Api::timeoutMavrosState(void) {
                          "The Mavros state should be supplied at 100 Hz to provide fast refresh rate on the state of the OFFBOARD mode.");
     RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 1000,
                          "If missing, the UAV could be disarmed by safety routines while not knowing it has switched to the MANUAL mode.");
-  }
+    RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 1000,
+                         "--------------------------------------------------------------------------------------------------------------");
 
-  error_publisher_->addGeneralError(error_type_t::not_receiving_mavros_state, "Not receiving Mavros state");
-}
-
-//}
-
-
-/* timeoutGeneralTopic() //{ */
-
-void MrsUavPx4Api::timeoutGeneralTopic(const std::string &topic_name, const rclcpp::Time &last_msg_time, const error_type_t &error_type,
-                                       const std::string &error_description) {
-
-  if (!is_initialized_) {
-    return;
-  }
-
-  const auto delay = clock_->now() - last_msg_time;
-
-  if (delay > _general_topic_timeout_) {
-
-    RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 1000, "Have not received '%s' for more than '%.3f s'", topic_name.c_str(), delay.seconds());
-
-    error_publisher_->addGeneralError(error_type, error_description);
+    const std::string error_msg = std::format("Not receiving Mavros state for more than '{:.3f} s'", time.seconds());
+    error_publisher_->addGeneralError(error_type_t::not_receiving_mavros_state, error_msg.c_str());
   }
 }
 
@@ -1327,28 +1317,15 @@ void MrsUavPx4Api::callbackGroundTruth(const nav_msgs::msg::Odometry::ConstShare
 // callbackIgnoreGroundTruth() //{ */
 
 bool MrsUavPx4Api::callbackIgnoreGroundTruth(const std_srvs::srv::SetBool::Request::SharedPtr req, std_srvs::srv::SetBool::Response::SharedPtr resp) {
-  mrs_lib::SubscriberHandlerOptions shopts;
-  shopts.node                                = node_;
-  shopts.node_name                           = "MrsHwPx4Api";
-  shopts.no_message_timeout                  = rclcpp::Duration::from_seconds(1.0);
-  shopts.threadsafe                          = true;
-  shopts.autostart                           = true;
-  shopts.subscription_options.callback_group = callback_group_;
-
-  rclcpp::QoS qos_profile(10);
-  qos_profile.reliability(RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT);
-  shopts.qos = qos_profile;
-
 
   if (req->data) {
     resp->message = "Stopping subscriber of ground_truth.";
-    if (sh_ground_truth_.hasMsg()) {
-      sh_ground_truth_.stop();
-    }
+    RCLCPP_INFO(node_->get_logger(), "%s'", resp->message.c_str());
+    sh_ground_truth_.stop();
   } else {
     resp->message = "Starting subscriber of ground_truth.";
-    init_subscriber_handler(this, sh_ground_truth_, shopts, "~/ground_truth_in", &MrsUavPx4Api::callbackGroundTruth, &MrsUavPx4Api::timeoutGeneralTopic,
-                            error_type_t::not_receiving_ground_truth, "Not receiving ground truth.");
+    RCLCPP_INFO(node_->get_logger(), "%s'", resp->message.c_str());
+    sh_ground_truth_.start();
   }
   resp->success = true;
   return true;
