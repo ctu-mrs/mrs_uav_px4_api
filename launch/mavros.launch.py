@@ -32,7 +32,7 @@ def generate_launch_description():
     config_yaml = LaunchConfiguration("config_yaml")
     use_sim_time = LaunchConfiguration("use_sim_time")
     use_default_garmin_tf = LaunchConfiguration("use_default_garmin_tf")
-    frame_id_namespace = LaunchConfiguration("frame_id_namespace")
+    tf_namespace = LaunchConfiguration("tf_namespace")
 
     launch_arguments = [
         DeclareLaunchArgument(
@@ -68,9 +68,9 @@ def generate_launch_description():
             description="Whether to use the default Garmin TF transform",
         ),
         DeclareLaunchArgument(
-            "frame_id_namespace",
+            "tf_namespace",
             default_value="",
-            description="Namespace for frame IDs",
+            description="Namespace for TF frames",
         ),
     ]
 
@@ -86,9 +86,9 @@ def generate_launch_description():
             {"tgt_component": 1},
             {"fcu_protocol": "v2.0"},
             {"use_sim_time": use_sim_time},
-            {"base_link_frame_id": [frame_id_namespace, "/base_link"]},
-            {"odom_frame_id": [frame_id_namespace, "/odom"]},
-            {"map_frame_id": [frame_id_namespace, "/map"]},
+            {"base_link_frame_id": [tf_namespace, "/base_link"]},
+            {"odom_frame_id": [tf_namespace, "/odom"]},
+            {"map_frame_id": [tf_namespace, "/map"]},
             ParameterFile(this_pkg_path + "/config/mavros_plugins.yaml", allow_substs=True),
             ParameterFile(config_yaml, allow_substs=True),
         ],
