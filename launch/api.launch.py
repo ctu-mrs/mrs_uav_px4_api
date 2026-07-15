@@ -91,7 +91,7 @@ def generate_launch_description():
     ld.add_action(ComposableNodeContainer(
 
         namespace=namespace,
-        name=namespace+'_container',
+        name='hw_api_container',
         package='rclcpp_components',
         executable='component_container_events_cbg',
         output='screen',
