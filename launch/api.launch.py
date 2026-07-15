@@ -86,11 +86,9 @@ def generate_launch_description():
         get_package_share_directory('mrs_uav_hw_api') + '/config/hw_api.yaml',
     ]
 
-    namespace = uav_name
-
     ld.add_action(ComposableNodeContainer(
 
-        namespace=namespace,
+        namespace=uav_name,
         name='hw_api_container',
         package='rclcpp_components',
         executable='component_container_events_cbg',
