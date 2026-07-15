@@ -24,6 +24,9 @@ def generate_launch_description():
         rate = 921600 if OLD_PX4_FW else 2000000
         default_fcu_url = f"/dev/pixhawk:{rate}"
 
+    default_garmin_id = "33" if OLD_PX4_FW else "0"
+    default_garmin_orientation = "0" if OLD_PX4_FW else "PITCH_270"
+
     gcs_url = "tcp-l://"
 
     uav_name = LaunchConfiguration("uav_name")
@@ -52,10 +55,18 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             "config_yaml",
-            default_value=os.path.join(
-                this_pkg_path, "config", f'mavros_px4_config{("_old_fw" if OLD_PX4_FW else "")}.yaml'
-            ),
+            default_value=os.path.join(this_pkg_path, "config", "mavros_px4_config.yaml"),
             description="Path to the MAVROS PX4 config YAML file",
+        ),
+        DeclareLaunchArgument(
+            "garmin_id",
+            default_value=default_garmin_id,
+            description="Distance sensor ID reported by MAVROS for the Garmin, firmware-dependent",
+        ),
+        DeclareLaunchArgument(
+            "garmin_orientation",
+            default_value=default_garmin_orientation,
+            description="Garmin sensor orientation enum used by MAVROS, firmware-dependent",
         ),
         DeclareLaunchArgument(
             "tgt_system",
@@ -69,7 +80,7 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             "tf_namespace",
-            default_value="",
+            default_value=[uav_name, "/mavros"],
             description="Namespace for TF frames",
         ),
     ]
