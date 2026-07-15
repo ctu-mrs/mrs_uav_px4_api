@@ -40,7 +40,7 @@ def generate_launch_description():
     launch_arguments = [
         DeclareLaunchArgument(
             "uav_name",
-            default_value=os.getenv("UAV_NAME", "uav"),
+            default_value=os.getenv("UAV_NAME", "uav1"),
             description="UAV namespace used by MAVROS",
         ),
         DeclareLaunchArgument(
