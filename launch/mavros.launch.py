@@ -27,10 +27,10 @@ def generate_launch_description():
     default_garmin_id = "33" if OLD_PX4_FW else "0"
     default_garmin_orientation = "0" if OLD_PX4_FW else "PITCH_270"
 
-    gcs_url = "tcp-l://"
 
     uav_name = LaunchConfiguration("uav_name")
     fcu_url = LaunchConfiguration("fcu_url")
+    gcs_url = LaunchConfiguration("gcs_url")
     tgt_system = LaunchConfiguration("tgt_system")
     config_yaml = LaunchConfiguration("config_yaml")
     use_sim_time = LaunchConfiguration("use_sim_time")
@@ -41,12 +41,16 @@ def generate_launch_description():
         DeclareLaunchArgument(
             "uav_name",
             default_value=os.getenv("UAV_NAME", "uav1"),
-            description="UAV namespace used by MAVROS",
         ),
         DeclareLaunchArgument(
             "fcu_url",
             default_value=default_fcu_url,
             description="FCU URL used by MAVROS",
+        ),
+        DeclareLaunchArgument(
+            "gcs_url",
+            default_value="tcp-l://",
+            description="GCS URL used by MAVROS",
         ),
         DeclareLaunchArgument(
             "use_sim_time",
