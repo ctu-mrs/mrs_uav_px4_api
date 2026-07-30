@@ -34,7 +34,6 @@ def generate_launch_description():
     tgt_system = LaunchConfiguration("tgt_system")
     config_yaml = LaunchConfiguration("config_yaml")
     use_sim_time = LaunchConfiguration("use_sim_time")
-    use_default_garmin_tf = LaunchConfiguration("use_default_garmin_tf")
     frame_namespace = LaunchConfiguration("frame_namespace")
 
     launch_arguments = [
@@ -78,11 +77,6 @@ def generate_launch_description():
             description="Target system ID for MAVROS",
         ),
         DeclareLaunchArgument(
-            "use_default_garmin_tf",
-            default_value="true",
-            description="Whether to use the default Garmin TF transform",
-        ),
-        DeclareLaunchArgument(
             "frame_namespace",
             default_value=[uav_name, "/mavros"],
             description="Namespace prefix for frame IDs and other identifiers mavros owns",
@@ -114,28 +108,9 @@ def generate_launch_description():
         ],
     )
 
-    garmin_tf_node = Node(
-        package="tf2_ros",
-        namespace="",
-        executable="static_transform_publisher",
-        name="fcu_to_garmin",
-        arguments=[
-            "--x", "0.0",
-            "--y", "0.0",
-            "--z", "-0.05",
-            "--roll", "0",
-            "--pitch", "1.5708",
-            "--yaw", "0",
-            "--frame-id", [uav_name, "/fcu"],
-            "--child-frame-id", [uav_name, "/garmin"],
-        ],
-        condition=IfCondition(use_default_garmin_tf),
-    )
-
     return LaunchDescription(
         launch_arguments
         + [
-            mavros_node,
-            garmin_tf_node,
+            mavros_node
         ]
     )
