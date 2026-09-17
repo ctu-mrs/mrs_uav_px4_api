@@ -59,7 +59,7 @@ def generate_launch_description():
 
     declare_simulation = DeclareLaunchArgument(
         'simulation',
-        default_value='true' if os.getenv('RUN_TYPE', 'simulation') == 'simulation' else 'false',
+        default_value='true' if os.getenv('RUN_TYPE', 'realworld') == 'simulation' else 'false',
         description='Whether to start a as a simulation or load into an existing container.'
     )
 
