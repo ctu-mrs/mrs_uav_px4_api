@@ -32,6 +32,7 @@
 #include <mavros_msgs/srv/command_long.hpp>
 #include <mavros_msgs/srv/set_mode.hpp>
 #include <mavros_msgs/msg/state.hpp>
+#include <mavros_msgs/msg/extended_state.hpp>
 #include <mavros_msgs/msg/rc_in.hpp>
 #include <mavros_msgs/msg/altitude.hpp>
 #include <mavros_msgs/msg/actuator_control.hpp>
@@ -168,6 +169,7 @@ private:
 
   mrs_lib::SubscriberHandler<nav_msgs::msg::Odometry>         sh_ground_truth_;
   mrs_lib::SubscriberHandler<mavros_msgs::msg::State>         sh_mavros_state_;
+  mrs_lib::SubscriberHandler<mavros_msgs::msg::ExtendedState> sh_mavros_extended_state_;
   mrs_lib::SubscriberHandler<nav_msgs::msg::Odometry>         sh_mavros_odometry_local_;
   mrs_lib::SubscriberHandler<nav_msgs::msg::Odometry>         sh_mavros_odometry_in_;
   mrs_lib::SubscriberHandler<sensor_msgs::msg::NavSatFix>     sh_mavros_gps_;
@@ -199,6 +201,8 @@ private:
 
   void timeoutMavrosState(void);
 
+  uint8_t airborne(const bool connected);
+
   double RCChannelToRange(const double &rc_value);
 
   // | ----------------------- publishers ----------------------- |
@@ -219,6 +223,7 @@ private:
   std::string       mode_;
   std::atomic<bool> armed_     = false;
   std::atomic<bool> connected_ = false;
+  rclcpp::Time      connected_since_; // guarded by mutex_status_
   std::mutex        mutex_status_;
 
   std::mutex                     mutex_orientation_;
@@ -268,6 +273,7 @@ void MrsUavPx4Api::initialize(const rclcpp::Node::SharedPtr &node, std::shared_p
   cbkgrp_ss_      = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
 
   last_mavros_state_time_ = rclcpp::Time(0, 0, clock_->get_clock_type());
+  connected_since_        = rclcpp::Time(0, 0, clock_->get_clock_type());
 
   error_publisher_ = std::make_shared<mrs_lib::errorgraph::ErrorPublisher>(node_, clock_, "HwApiManager", "Px4Api");
 
@@ -396,6 +402,8 @@ void MrsUavPx4Api::initialize(const rclcpp::Node::SharedPtr &node, std::shared_p
 
   sh_mavros_rc_ = mrs_lib::SubscriberHandler<mavros_msgs::msg::RCIn>(shopts, "~/mavros_rc_in", &MrsUavPx4Api::callbackRC, this);
 
+  sh_mavros_extended_state_ = mrs_lib::SubscriberHandler<mavros_msgs::msg::ExtendedState>(shopts, "~/mavros_extended_state_in");
+
   sh_mavros_battery_ = mrs_lib::SubscriberHandler<sensor_msgs::msg::BatteryState>(shopts, "~/mavros_battery_in", &MrsUavPx4Api::callbackBattery, this);
 
   // | ----------------------- publishers ----------------------- |
@@ -448,10 +456,58 @@ mrs_msgs::msg::HwApiStatus MrsUavPx4Api::getStatus() {
     status.armed     = armed_;
     status.offboard  = offboard_;
     status.connected = connected_;
+    status.airborne  = airborne(status.connected);
     status.mode      = mode_;
   }
 
   return status;
+}
+
+//}
+
+/* airborne() //{ */
+
+uint8_t MrsUavPx4Api::airborne(const bool connected) {
+
+  if (!connected) {
+    return mrs_msgs::msg::HwApiStatus::AIRBORNE_UNKNOWN;
+  }
+
+  if (!sh_mavros_extended_state_.hasMsg()) {
+
+    const double since_connect = (clock_->now() - connected_since_).seconds();
+
+    if (since_connect > 3.0) {
+      RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 10000,
+                           "no mavros extended_state received %.1f s after connecting, airborne is UNKNOWN -- is EXTENDED_SYS_STATE streamed (extras.txt)?",
+                           since_connect);
+    }
+
+    return mrs_msgs::msg::HwApiStatus::AIRBORNE_UNKNOWN;
+  }
+
+  const double age = (clock_->now() - sh_mavros_extended_state_.lastMsgTime()).seconds();
+
+  // EXTENDED_SYS_STATE should stream at 100 Hz (pixhawk_sdcard_config extras.txt); PX4's default is 1 Hz
+  if (age > 0.2) {
+    RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 10000,
+                         "mavros extended_state is %.2f s old, expected ~100 Hz -- is EXTENDED_SYS_STATE streamed at 100 Hz (extras.txt)?", age);
+  }
+
+  // a frozen value would misreport MANUAL/ARMED forever; UNKNOWN makes consumers fall back to the safe default
+  if (age > 1.0) {
+    return mrs_msgs::msg::HwApiStatus::AIRBORNE_UNKNOWN;
+  }
+  switch (sh_mavros_extended_state_.getMsg()->landed_state) {
+  case mavros_msgs::msg::ExtendedState::LANDED_STATE_ON_GROUND:
+    return mrs_msgs::msg::HwApiStatus::AIRBORNE_NO;
+  case mavros_msgs::msg::ExtendedState::LANDED_STATE_IN_AIR:
+  case mavros_msgs::msg::ExtendedState::LANDED_STATE_TAKEOFF:
+  case mavros_msgs::msg::ExtendedState::LANDED_STATE_LANDING:
+    return mrs_msgs::msg::HwApiStatus::AIRBORNE_YES;
+  default: // UNDEFINED (land detector not initialized yet) and anything unexpected
+    return mrs_msgs::msg::HwApiStatus::AIRBORNE_UNKNOWN;
+  }
 }
 
 //}
@@ -748,8 +804,12 @@ void MrsUavPx4Api::timeoutMavrosState(void) {
 
   if (time.seconds() > _mavros_timeout_) {
 
+    bool was_connected = false;
+
     {
       std::scoped_lock lock(mutex_status_);
+
+      was_connected = connected_;
 
       connected_ = false;
       offboard_  = false;
@@ -761,6 +821,28 @@ void MrsUavPx4Api::timeoutMavrosState(void) {
 
     const std::string error_msg = std::format("Not receiving Mavros state for more than '{:.3f} s'", time.seconds());
     error_publisher_->addGeneralError(error_type_t::not_receiving_mavros_state, error_msg.c_str());
+
+    // publish once on the connected -> disconnected transition; HwApiManager republishes at 1 Hz afterwards
+    if (was_connected) {
+
+      rclcpp::Time timestamp = clock_->now();
+
+      mrs_msgs::msg::HwApiStatus status;
+
+      {
+        std::scoped_lock lock(mutex_status_);
+
+        status.stamp     = timestamp;
+        status.armed     = armed_;
+        status.offboard  = offboard_;
+        status.connected = connected_;
+        status.airborne  = airborne(status.connected);
+        status.mode      = mode_;
+      }
+
+      common_handlers_->publishers.publishStatus(status);
+    }
+
     return;
   }
 
@@ -814,8 +896,28 @@ void MrsUavPx4Api::callbackMavrosState(const mavros_msgs::msg::State::ConstShare
 
   RCLCPP_INFO_ONCE(node_->get_logger(), "getting Mavros state");
 
-  {
+  // mavros sends one state with connected=false after losing the FCU link (its conn_timeout); report it the same way
+  // as timeoutMavrosState() does, and don't refresh the last state time so the timeout keeps reporting the error
+  if (!msg->connected) {
+
+    {
+      std::scoped_lock lock(mutex_status_);
+
+      connected_ = false;
+      offboard_  = false;
+      armed_     = false;
+      mode_      = "";
+    }
+
+    RCLCPP_WARN(node_->get_logger(), "Mavros reports the FCU as disconnected");
+
+  } else {
+
     std::scoped_lock lock(mutex_status_);
+
+    if (!connected_) {
+      connected_since_ = clock_->now();
+    }
 
     offboard_  = msg->mode == "OFFBOARD";
     armed_     = msg->armed;
@@ -836,10 +938,13 @@ void MrsUavPx4Api::callbackMavrosState(const mavros_msgs::msg::State::ConstShare
     status.armed     = armed_;
     status.offboard  = offboard_;
     status.connected = connected_;
+    status.airborne  = airborne(status.connected);
     status.mode      = mode_;
   }
 
-  mrs_lib::set_mutexed(mutex_last_mavros_state_time_, timestamp, last_mavros_state_time_);
+  if (msg->connected) {
+    mrs_lib::set_mutexed(mutex_last_mavros_state_time_, timestamp, last_mavros_state_time_);
+  }
 
   common_handlers_->publishers.publishStatus(status);
 }
