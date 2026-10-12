@@ -4,7 +4,7 @@ mrs_uav_hw_api:
 
   inputs:
     actuators:             false # not supported
-    control_group:         false
+    control_group:         false # requires the actuator_control plugin in mavros_plugins.yaml, otherwise commands are dropped
     attitude_rate:         true
     attitude:              true
     acceleration_hdg_rate: false # not supported
