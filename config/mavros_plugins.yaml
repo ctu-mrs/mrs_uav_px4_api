@@ -1,89 +1,73 @@
 /**:
   ros__parameters:
-    # plugin_denylist:
-      
-      # # common
-      # - 3dr_radio
-      # # - actuator_control
-      # - hil
-      # - ftp
-      # - manual_control
-      # - safety_area
-      # - setpoint_accel
-      # - setpoint_velocity
-      # - setpoint_position
-      # - setpoint_attitude
-      # - setpoint_trajectory
-      # - home_position
-      # - sys_time
-      # - vfr_hud
-      # - waypoint
-      # - landing_target
-      # - mount_control
-      # - onboard_computer_status
-      # - geofence
-      # - nav_controller_output
-      # - rallypoint
+    # all mavros 2.16 plugins, only the ones the HW API uses are enabled (each plugin is a node, costs CPU)
+    # with standalone:=false (default), this list is always used, UAS params (plugin_allowlist, plugin_denylist) in a custom mavros_config are ignored
+    plugin_allowlist:
 
-      # # extras
-      # - image_pub
-      # - vibration
-      # # - distance_sensor
-      # - rangefinder
-      # - vision_speed_estimate
-      # - vision_pose_estimate
-      # - px4flow
-      # - mocap_pose_estimate
-      # - cam_imu_sync
-      # - fake_gps
-      # # - gps_rtk
-      # - obstacle_distance
-      # - servo_state_publisher
-      # - companion_process_status
-      # - wheel_odometry
-      # - trajectory
-      # # - odom
-      # - adsb
-      # # - debug_value
+      # mavros (core)
+      # - actuator_control      # needed only for input_mode/control_group
+      - altitude                # altitude
+      - command                 # cmd/command (arming)
+      # - ftp
+      # - geofence
+      - global_position         # global_position/global, global_position/compass_hdg
+      # - home_position
+      - imu                     # imu/data, imu/mag
+      - local_position          # local_position/odom (always, also odometry/in with OLD_PX4_FW)
+      # - manual_control
+      # - nav_controller_output
+      # - param
+      # - rallypoint
+      - rc_io                   # rc/in
+      # - setpoint_accel
+      # - setpoint_attitude
+      # - setpoint_position
+      - setpoint_raw            # setpoint_raw/attitude (attitude and attitude_rate cmds)
+      # - setpoint_trajectory
+      # - setpoint_velocity
+      - sys_status              # state, extended_state, battery, set_mode
+      - sys_time                # timesync, needed for correct message stamps
+      # - waypoint
       # - wind_estimation
-      # - log_transfer
+
+      # mavros_extras
+      # - adsb
+      # - cam_imu_sync
+      # - camera
       # - cellular_status
+      # - companion_process_status
+      # - debug_value
+      - distance_sensor         # garmin
       # - esc_status
       # - esc_telemetry
+      # - fake_gps
       # - gimbal_control
+      # - gps_input
+      # - gps_rtk               # needed only when RTCM corrections are sent through mavros (gps_rtk/send_rtcm)
+      - gps_status              # gpsstatus/gps
+      # - guided_target
+      # - hil
+      # - landing_target
+      # - log_transfer
+      # - mag_calibration_status
+      # - mocap_pose_estimate
+      # - mount_control
+      # - obstacle_distance
       # - obstacle_distance_3d
+      - odometry                # odometry/in
+      # - onboard_computer_status
       # - open_drone_id
       # - optical_flow
       # - play_tune
+      # - px4flow
+      # - rangefinder
       # - sim_state
+      # - tdr_radio
       # - terrain
+      # - trajectory
       # - tunnel
-
-    plugin_allowlist:
-      # core
-      # - actuator_control
-      - altitude
-      - attitude
-      - command
-      - global_position
-      - home_position
-      - imu
-      - local_position
-      - manual_control
-      # - param
-      - rc_io
-      - setpoint_accel
-      - setpoint_attitude
-      - setpoint_position
-      - setpoint_raw
-      - setpoint_velocity
-      - sys_status
-      - sys_time
-
-      # mavros_extras
-      - distance_sensor
-      - gps_input
-      - gps_rtk
-      - gps_status
-      - mag_calibration_status
-      - odometry
+      # - vfr_hud
+      # - vibration
+      # - vision_pose
+      # - vision_speed
+      # - wheel_odometry
