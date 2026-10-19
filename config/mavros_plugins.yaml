@@ -1,7 +1,9 @@
 /**:
   ros__parameters:
     # all mavros 2.16 plugins, only the ones the HW API uses are enabled (each plugin is a node, costs CPU)
-    # with standalone:=false (default), this list is always used, UAS params (plugin_allowlist, plugin_denylist) in a custom mavros_config are ignored
+    # to change it, set plugin_allowlist in a custom config passed as mavros_config:=<file>,
+    # lists are not merged, a custom plugin_allowlist replaces this whole list
+    # (don't use plugin_denylist to trim it, with a non-empty denylist mavros loads every plugin not denied)
     plugin_allowlist:
 
       # mavros (core)

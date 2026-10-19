@@ -3,7 +3,6 @@
 import launch
 import os
 import re
-import yaml
 
 from launch_ros.actions import ComposableNodeContainer, Node
 from launch_ros.descriptions import ComposableNode
@@ -55,13 +54,26 @@ def mavros_settings(context, uav_name, this_pkg_path):
         garmin_id = '33' if old_px4_fw else '0'
         garmin_orientation = '0' if old_px4_fw else 'PITCH_270'
 
+    # custom config is loaded on top of the package defaults, a relative path is relative to the current working directory
+    custom_config = context.perform_substitution(LaunchConfiguration('mavros_config'))
+    if custom_config:
+        custom_config = os.path.join(os.getenv('PWD', os.getcwd()), custom_config)
+        if not os.path.isfile(custom_config):
+            raise RuntimeError(f'mavros_config "{custom_config}" does not exist')
+
+    config_files = [this_pkg_path + '/config/mavros_px4_config.yaml']
+
+    if custom_config:
+        config_files.append(custom_config)
+
     return {
         'fcu_url': arg_or_default('mavros_fcu_url', fcu_url),
         'gcs_url': arg_or_default('mavros_gcs_url', gcs_url),
         'tgt_system': arg_or_default('mavros_tgt_system', tgt_system),
         'garmin_id': garmin_id,
         'garmin_orientation': garmin_orientation,
-        'config_yaml': arg_or_default('mavros_config', this_pkg_path + '/config/mavros_px4_config.yaml'),
+        'plugins_file': this_pkg_path + '/config/mavros_plugins.yaml',
+        'config_files': config_files,
     }
 
 
@@ -95,13 +107,10 @@ def mavros_common(mavros, uav_name):
     return tgt_system, uas_url, remappings, frame_ids, launch_configurations
 
 
-def mavros_components(mavros, uav_name, use_sim_time, this_pkg_path):
+def mavros_components(mavros, uav_name, use_sim_time):
     '''MAVROS router + UAS as components of hw_api_container (mavros >= 2.16)'''
 
     tgt_system, uas_url, remappings, frame_ids, launch_configurations = mavros_common(mavros, uav_name)
-
-    with open(this_pkg_path + '/config/mavros_plugins.yaml') as f:
-        plugin_allowlist = yaml.safe_load(f)['/**']['ros__parameters']['plugin_allowlist']
 
     router_params = [
         {'fcu_urls': [mavros['fcu_url']]},
@@ -130,13 +139,17 @@ def mavros_components(mavros, uav_name, use_sim_time, this_pkg_path):
             plugin='mavros::uas::UAS',
             namespace=uav_name,
             name='mavros',
+            # components don't get the container's parameter files (use_global_arguments(false)), so the UAS loads
+            # mavros_plugins.yaml (plugin_allowlist) and the config files itself,
+            # the explicit parameters below go last so the files can't override them
             parameters=[
+                ParameterFile(mavros['plugins_file'], allow_substs=True),
+                *[ParameterFile(path, allow_substs=True) for path in mavros['config_files']],
                 {'uas_url': uas_url},
                 {'fcu_protocol': 'v2.0'},
                 {'system_id': tgt_system},
                 {'target_system_id': tgt_system},
                 {'target_component_id': 1},
-                {'plugin_allowlist': plugin_allowlist},
                 *frame_ids,
                 {'use_sim_time': use_sim_time},
             ],
@@ -148,7 +161,7 @@ def mavros_components(mavros, uav_name, use_sim_time, this_pkg_path):
     return components, launch_configurations
 
 
-def mavros_standalone(mavros, uav_name, use_sim_time, this_pkg_path):
+def mavros_standalone(mavros, uav_name, use_sim_time):
     '''MAVROS as a separate mavros_node process'''
 
     tgt_system, _, remappings, frame_ids, launch_configurations = mavros_common(mavros, uav_name)
@@ -163,7 +176,10 @@ def mavros_standalone(mavros, uav_name, use_sim_time, this_pkg_path):
         respawn=os.getenv('respawn_mavros', 'false') == 'true',
         respawn_delay=2.0,
         additional_env={'MAVROS_EXECUTOR_TYPE': LaunchConfiguration('mavros_executor')},
+        # the explicit parameters go last so the files can't override them (same as in the container)
         parameters=[
+            ParameterFile(mavros['plugins_file'], allow_substs=True),
+            *[ParameterFile(path, allow_substs=True) for path in mavros['config_files']],
             {'fcu_url': mavros['fcu_url']},
             {'gcs_url': mavros['gcs_url']},
             {'tgt_system': tgt_system},
@@ -171,8 +187,6 @@ def mavros_standalone(mavros, uav_name, use_sim_time, this_pkg_path):
             {'fcu_protocol': 'v2.0'},
             {'use_sim_time': use_sim_time},
             *frame_ids,
-            ParameterFile(this_pkg_path + '/config/mavros_plugins.yaml', allow_substs=True),
-            ParameterFile(mavros['config_yaml'], allow_substs=True),
         ],
         remappings=remappings,
     )
@@ -191,15 +205,16 @@ def hw_api_container(context, uav_name, use_sim_time, configs, custom_config, si
     container_options = {}
 
     if in_container:
-        mavros_nodes, actions = mavros_components(mavros, uav_name, use_sim_time, this_pkg_path)
+        mavros_nodes, actions = mavros_components(mavros, uav_name, use_sim_time)
         container_options = {
-            # mavros applies only the container's process-wide parameters to its plugin nodes
-            'parameters': [ParameterFile(mavros['config_yaml'], allow_substs=True)],
+            # mavros applies only the container's process-wide parameters to its plugin nodes,
+            # they don't need mavros_plugins.yaml, the UAS loads it as a component
+            'parameters': [ParameterFile(path, allow_substs=True) for path in mavros['config_files']],
             'ros_arguments': ['-p', 'use_sim_time:=' + str(use_sim_time).lower()],
             'additional_env': {'MAVROS_EXECUTOR_TYPE': LaunchConfiguration('mavros_executor')},
         }
     else:
-        actions = mavros_standalone(mavros, uav_name, use_sim_time, this_pkg_path)
+        actions = mavros_standalone(mavros, uav_name, use_sim_time)
 
     hw_api_node = ComposableNode(
         package='mrs_uav_hw_api',
@@ -343,7 +358,11 @@ def generate_launch_description():
     ld.add_action(DeclareLaunchArgument('mavros_fcu_url', default_value='auto', description='FCU URL used by MAVROS'))
     ld.add_action(DeclareLaunchArgument('mavros_gcs_url', default_value='auto', description='GCS URL used by MAVROS'))
     ld.add_action(DeclareLaunchArgument('mavros_tgt_system', default_value='auto', description='Target system ID for MAVROS'))
-    ld.add_action(DeclareLaunchArgument('mavros_config', default_value='auto', description='MAVROS plugin config yaml, "auto" uses config/mavros_px4_config.yaml'))
+    ld.add_action(DeclareLaunchArgument(
+        'mavros_config',
+        default_value='',
+        description='Custom MAVROS config yaml loaded on top of config/mavros_px4_config.yaml and config/mavros_plugins.yaml (incl. plugin_allowlist). The path can be absolute or relative to the current working directory',
+    ))
 
     # #} end of mavros
 

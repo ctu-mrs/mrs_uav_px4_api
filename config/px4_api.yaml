@@ -11,7 +11,7 @@ plugin:
     amsl: 340.0
   
   input_mode:
-    control_group: false # requires the actuator_control plugin in mavros_plugins.yaml, otherwise commands are dropped
+    control_group: false # requires the actuator_control mavros plugin (add it to plugin_allowlist in a mavros_config), otherwise commands are dropped
     attitude_rate: true
     attitude:      true
   
