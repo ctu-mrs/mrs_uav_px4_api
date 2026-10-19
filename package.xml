@@ -39,8 +39,6 @@
 
   <depend>mrs-geographiclib-datasets</depend>
 
-  <exec_depend>python3-yaml</exec_depend>
-
   <!-- Linters -->
   <test_depend>ament_cmake_clang_format</test_depend>
   <test_depend>ament_cmake_xmllint</test_depend>
