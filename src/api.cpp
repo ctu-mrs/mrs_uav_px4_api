@@ -274,8 +274,6 @@ void MrsUavPx4Api::initialize(const rclcpp::Node::SharedPtr &node, std::shared_p
   _body_frame_name_  = common_handlers->getBodyFrameName();
   _world_frame_name_ = common_handlers->getWorldFrameName();
 
-  _capabilities_.api_name = "Px4Api";
-
   callback_group_ = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
   cbkgrp_ss_      = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
 
@@ -304,32 +302,29 @@ void MrsUavPx4Api::initialize(const rclcpp::Node::SharedPtr &node, std::shared_p
   param_loader->loadParam("gnss/utm_zone", _sim_rtk_utm_zone_);
   param_loader->loadParam("gnss/amsl", _sim_rtk_amsl_);
 
-  param_loader->loadParam("input_mode/control_group", (bool &)_capabilities_.accepts_control_group_cmd);
-  param_loader->loadParam("input_mode/attitude_rate", (bool &)_capabilities_.accepts_attitude_rate_cmd);
-  param_loader->loadParam("input_mode/attitude", (bool &)_capabilities_.accepts_attitude_cmd);
-
-  param_loader->loadParam("outputs/distance_sensor", (bool &)_capabilities_.produces_distance_sensor);
-  param_loader->loadParam("outputs/gnss", (bool &)_capabilities_.produces_gnss);
-  param_loader->loadParam("outputs/gnss_status", (bool &)_capabilities_.produces_gnss_status);
-  param_loader->loadParam("outputs/rtk", (bool &)_capabilities_.produces_rtk);
-  param_loader->loadParam("outputs/ground_truth", (bool &)_capabilities_.produces_ground_truth);
-  param_loader->loadParam("outputs/imu", (bool &)_capabilities_.produces_imu);
-  param_loader->loadParam("outputs/altitude", (bool &)_capabilities_.produces_altitude);
-  param_loader->loadParam("outputs/magnetometer_heading", (bool &)_capabilities_.produces_magnetometer_heading);
-  param_loader->loadParam("outputs/magnetic_field", (bool &)_capabilities_.produces_magnetic_field);
-  param_loader->loadParam("outputs/rc_channels", (bool &)_capabilities_.produces_rc_channels);
-  param_loader->loadParam("outputs/rc_rssi", (bool &)_capabilities_.produces_rc_rssi);
-  param_loader->loadParam("outputs/battery_state", (bool &)_capabilities_.produces_battery_state);
-  param_loader->loadParam("outputs/position", (bool &)_capabilities_.produces_position);
-  param_loader->loadParam("outputs/orientation", (bool &)_capabilities_.produces_orientation);
-  param_loader->loadParam("outputs/velocity", (bool &)_capabilities_.produces_velocity);
-  param_loader->loadParam("outputs/angular_velocity", (bool &)_capabilities_.produces_angular_velocity);
-  param_loader->loadParam("outputs/odometry", (bool &)_capabilities_.produces_odometry);
-
   if (!param_loader->loadedSuccessfully()) {
     RCLCPP_ERROR(node_->get_logger(), "Could not load all parameters!");
     error_publisher_->addOneshotError("Could not load all parameters!");
     error_publisher_->flushAndShutdown();
+  }
+
+  // | ---------------------- capabilities ---------------------- |
+
+  // what is requested and implemented
+  _capabilities_          = common_handlers_->requested_capabilities;
+  _capabilities_.api_name = "Px4Api";
+
+  _capabilities_.accepts_actuator_cmd              = false;
+  _capabilities_.accepts_acceleration_hdg_rate_cmd = false;
+  _capabilities_.accepts_acceleration_hdg_cmd      = false;
+  _capabilities_.accepts_velocity_hdg_rate_cmd     = false;
+  _capabilities_.accepts_velocity_hdg_cmd          = false;
+  _capabilities_.accepts_position_cmd              = false;
+
+  // both come from the simulator's ground truth
+  if (!_simulation_) {
+    _capabilities_.produces_rtk          = false;
+    _capabilities_.produces_ground_truth = false;
   }
 
   // | --------------------- service clients -------------------- |

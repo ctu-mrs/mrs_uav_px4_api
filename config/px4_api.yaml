@@ -2,6 +2,36 @@ mrs_uav_hw_api:
 
   hw_interface_plugin: "mrs_uav_px4_api::MrsUavPx4Api"
 
+  input_mode:
+    actuators:             false # not supported
+    control_group:         false
+    attitude_rate:         true
+    attitude:              true
+    acceleration_hdg_rate: false # not supported
+    acceleration_hdg:      false # not supported
+    velocity_hdg_rate:     false # not supported
+    velocity_hdg:          false # not supported
+    position:              false # not supported
+
+  outputs:
+    distance_sensor:      true
+    gnss:                 true
+    gnss_status:          true
+    rtk:                  false # only in simulation
+    ground_truth:         false # only in simulation
+    imu:                  true
+    altitude:             true
+    magnetometer_heading: true
+    magnetic_field:       true
+    rc_channels:          true
+    rc_rssi:              true
+    battery_state:        true
+    position:             true
+    orientation:          true
+    velocity:             true
+    angular_velocity:     true
+    odometry:             true
+
   plugin:
 
     mavros_state:
@@ -13,27 +43,3 @@ mrs_uav_hw_api:
       utm_x: 465710.758973
       utm_y: 5249465.43086
       amsl: 340.0
-
-    input_mode:
-      control_group: false
-      attitude_rate: true
-      attitude:      true
-
-    outputs:
-      distance_sensor:      true
-      gnss:                 true
-      gnss_status:          true
-      rtk:                  false # TODO implement RTK
-      imu:                  true
-      altitude:             true
-      magnetometer_heading: true
-      magnetic_field:       true
-      rc_channels:          true
-      rc_rssi:              true
-      battery_state:        true
-      position:             true
-      orientation:          true
-      velocity:             true
-      angular_velocity:     true
-      odometry:             true
-      ground_truth:         true
