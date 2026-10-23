@@ -286,10 +286,7 @@ void MrsUavPx4Api::initialize(const rclcpp::Node::SharedPtr &node, std::shared_p
 
   // | ------------------- loading parameters ------------------- |
 
-  mrs_lib::ParamLoader local_param_loader(node_, "MrsUavPx4Api");
-
-  std::vector<std::string> config_files;
-  common_handlers_->main_param_loader->loadParamReusable("configs", config_files);
+  std::shared_ptr<mrs_lib::ParamLoader> param_loader = common_handlers_->plugin_param_loader;
 
   common_handlers_->main_param_loader->loadParam("simulation", _simulation_);
 
@@ -299,44 +296,40 @@ void MrsUavPx4Api::initialize(const rclcpp::Node::SharedPtr &node, std::shared_p
     error_publisher_->flushAndShutdown();
   }
 
-  for (auto config_file : config_files) {
-    RCLCPP_INFO(node_->get_logger(), "loading config file '%s'", config_file.c_str());
-    local_param_loader.addYamlFile(config_file);
-  }
+  param_loader->loadParam("mavros_state/timeout", _mavros_state_timeout_);
+  param_loader->loadParam("mavros_state/warning_delay", _mavros_state_warning_delay_);
 
-  local_param_loader.loadParam("mavros_state/timeout", _mavros_state_timeout_);
-  local_param_loader.loadParam("mavros_state/warning_delay", _mavros_state_warning_delay_);
+  param_loader->loadParam("gnss/utm_x", _sim_rtk_utm_x_);
+  param_loader->loadParam("gnss/utm_y", _sim_rtk_utm_y_);
+  param_loader->loadParam("gnss/utm_zone", _sim_rtk_utm_zone_);
+  param_loader->loadParam("gnss/amsl", _sim_rtk_amsl_);
 
-  local_param_loader.loadParam("gnss/utm_x", _sim_rtk_utm_x_);
-  local_param_loader.loadParam("gnss/utm_y", _sim_rtk_utm_y_);
-  local_param_loader.loadParam("gnss/utm_zone", _sim_rtk_utm_zone_);
-  local_param_loader.loadParam("gnss/amsl", _sim_rtk_amsl_);
+  param_loader->loadParam("input_mode/control_group", (bool &)_capabilities_.accepts_control_group_cmd);
+  param_loader->loadParam("input_mode/attitude_rate", (bool &)_capabilities_.accepts_attitude_rate_cmd);
+  param_loader->loadParam("input_mode/attitude", (bool &)_capabilities_.accepts_attitude_cmd);
 
-  local_param_loader.loadParam("input_mode/control_group", (bool &)_capabilities_.accepts_control_group_cmd);
-  local_param_loader.loadParam("input_mode/attitude_rate", (bool &)_capabilities_.accepts_attitude_rate_cmd);
-  local_param_loader.loadParam("input_mode/attitude", (bool &)_capabilities_.accepts_attitude_cmd);
+  param_loader->loadParam("outputs/distance_sensor", (bool &)_capabilities_.produces_distance_sensor);
+  param_loader->loadParam("outputs/gnss", (bool &)_capabilities_.produces_gnss);
+  param_loader->loadParam("outputs/gnss_status", (bool &)_capabilities_.produces_gnss_status);
+  param_loader->loadParam("outputs/rtk", (bool &)_capabilities_.produces_rtk);
+  param_loader->loadParam("outputs/ground_truth", (bool &)_capabilities_.produces_ground_truth);
+  param_loader->loadParam("outputs/imu", (bool &)_capabilities_.produces_imu);
+  param_loader->loadParam("outputs/altitude", (bool &)_capabilities_.produces_altitude);
+  param_loader->loadParam("outputs/magnetometer_heading", (bool &)_capabilities_.produces_magnetometer_heading);
+  param_loader->loadParam("outputs/magnetic_field", (bool &)_capabilities_.produces_magnetic_field);
+  param_loader->loadParam("outputs/rc_channels", (bool &)_capabilities_.produces_rc_channels);
+  param_loader->loadParam("outputs/rc_rssi", (bool &)_capabilities_.produces_rc_rssi);
+  param_loader->loadParam("outputs/battery_state", (bool &)_capabilities_.produces_battery_state);
+  param_loader->loadParam("outputs/position", (bool &)_capabilities_.produces_position);
+  param_loader->loadParam("outputs/orientation", (bool &)_capabilities_.produces_orientation);
+  param_loader->loadParam("outputs/velocity", (bool &)_capabilities_.produces_velocity);
+  param_loader->loadParam("outputs/angular_velocity", (bool &)_capabilities_.produces_angular_velocity);
+  param_loader->loadParam("outputs/odometry", (bool &)_capabilities_.produces_odometry);
 
-  local_param_loader.loadParam("outputs/distance_sensor", (bool &)_capabilities_.produces_distance_sensor);
-  local_param_loader.loadParam("outputs/gnss", (bool &)_capabilities_.produces_gnss);
-  local_param_loader.loadParam("outputs/gnss_status", (bool &)_capabilities_.produces_gnss_status);
-  local_param_loader.loadParam("outputs/rtk", (bool &)_capabilities_.produces_rtk);
-  local_param_loader.loadParam("outputs/ground_truth", (bool &)_capabilities_.produces_ground_truth);
-  local_param_loader.loadParam("outputs/imu", (bool &)_capabilities_.produces_imu);
-  local_param_loader.loadParam("outputs/altitude", (bool &)_capabilities_.produces_altitude);
-  local_param_loader.loadParam("outputs/magnetometer_heading", (bool &)_capabilities_.produces_magnetometer_heading);
-  local_param_loader.loadParam("outputs/magnetic_field", (bool &)_capabilities_.produces_magnetic_field);
-  local_param_loader.loadParam("outputs/rc_channels", (bool &)_capabilities_.produces_rc_channels);
-  local_param_loader.loadParam("outputs/rc_rssi", (bool &)_capabilities_.produces_rc_rssi);
-  local_param_loader.loadParam("outputs/battery_state", (bool &)_capabilities_.produces_battery_state);
-  local_param_loader.loadParam("outputs/position", (bool &)_capabilities_.produces_position);
-  local_param_loader.loadParam("outputs/orientation", (bool &)_capabilities_.produces_orientation);
-  local_param_loader.loadParam("outputs/velocity", (bool &)_capabilities_.produces_velocity);
-  local_param_loader.loadParam("outputs/angular_velocity", (bool &)_capabilities_.produces_angular_velocity);
-  local_param_loader.loadParam("outputs/odometry", (bool &)_capabilities_.produces_odometry);
-
-  if (!local_param_loader.loadedSuccessfully()) {
+  if (!param_loader->loadedSuccessfully()) {
     RCLCPP_ERROR(node_->get_logger(), "Could not load all parameters!");
-    rclcpp::shutdown();
+    error_publisher_->addOneshotError("Could not load all parameters!");
+    error_publisher_->flushAndShutdown();
   }
 
   // | --------------------- service clients -------------------- |
