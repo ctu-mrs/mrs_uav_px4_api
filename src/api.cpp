@@ -320,6 +320,7 @@ void MrsUavPx4Api::initialize(const rclcpp::Node::SharedPtr &node, std::shared_p
   _capabilities_.accepts_velocity_hdg_rate_cmd     = false;
   _capabilities_.accepts_velocity_hdg_cmd          = false;
   _capabilities_.accepts_position_cmd              = false;
+  _capabilities_.accepts_feedforward               = false;
 
   // both come from the simulator's ground truth
   if (!_simulation_) {
