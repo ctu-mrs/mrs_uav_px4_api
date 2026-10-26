@@ -327,6 +327,13 @@ void MrsUavPx4Api::initialize(const rclcpp::Node::SharedPtr &node, std::shared_p
     _capabilities_.produces_ground_truth = false;
   }
 
+  // the UTM correction of the position and odometry takes its reference from the gnss
+  if (!_capabilities_.produces_gnss && (_capabilities_.produces_position || _capabilities_.produces_odometry)) {
+    RCLCPP_WARN(
+        node_->get_logger(),
+        "outputs/gnss is disabled, the position and odometry stay in PX4's local frame without the UTM correction, this is fine when flying without GNSS");
+  }
+
   // | --------------------- service clients -------------------- |
 
   sch_mavros_command_long_ = mrs_lib::ServiceClientHandler<mavros_msgs::srv::CommandLong>(node_, "~/mavros_cmd_out", callback_group_);

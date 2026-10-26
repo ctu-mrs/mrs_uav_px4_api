@@ -15,7 +15,7 @@ mrs_uav_hw_api:
 
   outputs:
     distance_sensor:      true
-    gnss:                 true
+    gnss:                 true # also the reference for the UTM correction of position and odometry
     gnss_status:          true
     rtk:                  false # only in simulation
     ground_truth:         false # only in simulation
