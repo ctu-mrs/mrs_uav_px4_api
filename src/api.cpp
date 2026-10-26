@@ -1162,19 +1162,16 @@ void MrsUavPx4Api::callbackNavsatFix(const sensor_msgs::msg::NavSatFix::ConstSha
 
   RCLCPP_INFO_ONCE(node_->get_logger(), "getting NavSat fix");
 
-  if (_capabilities_.produces_gnss) {
+  common_handlers_->publishers.publishGNSS(*msg);
 
-    common_handlers_->publishers.publishGNSS(*msg);
+  if (!_ref_latlon_init) {
 
-    if (!_ref_latlon_init) {
-
-      _ref_lat     = DEG2RAD(msg->latitude);
-      _ref_lon     = DEG2RAD(msg->longitude);
-      _ref_sin_lat = sin(_ref_lat);
-      _ref_cos_lat = cos(_ref_lat);
-      mrs_lib::UTM(msg->latitude, msg->longitude, &_ref_utm_x, &_ref_utm_y);
-      _ref_latlon_init = true;
-    }
+    _ref_lat     = DEG2RAD(msg->latitude);
+    _ref_lon     = DEG2RAD(msg->longitude);
+    _ref_sin_lat = sin(_ref_lat);
+    _ref_cos_lat = cos(_ref_lat);
+    mrs_lib::UTM(msg->latitude, msg->longitude, &_ref_utm_x, &_ref_utm_y);
+    _ref_latlon_init = true;
   }
 }
 
@@ -1190,14 +1187,11 @@ void MrsUavPx4Api::callbackDistanceSensor(const sensor_msgs::msg::Range::ConstSh
 
   RCLCPP_INFO_ONCE(node_->get_logger(), "getting distnace sensor");
 
-  if (_capabilities_.produces_distance_sensor) {
+  auto msg_out = *msg;
 
-    auto msg_out = *msg;
+  msg_out.min_range = 0.001;
 
-    msg_out.min_range = 0.001;
-
-    common_handlers_->publishers.publishDistanceSensor(msg_out);
-  }
+  common_handlers_->publishers.publishDistanceSensor(msg_out);
 }
 
 //}
@@ -1212,13 +1206,10 @@ void MrsUavPx4Api::callbackImu(const sensor_msgs::msg::Imu::ConstSharedPtr msg) 
 
   RCLCPP_INFO_ONCE(node_->get_logger(), "getting IMU");
 
-  if (_capabilities_.produces_imu) {
+  sensor_msgs::msg::Imu new_imu_msg = *msg;
+  new_imu_msg.header.frame_id       = _uav_name_ + "/" + _body_frame_name_;
 
-    sensor_msgs::msg::Imu new_imu_msg = *msg;
-    new_imu_msg.header.frame_id       = _uav_name_ + "/" + _body_frame_name_;
-
-    common_handlers_->publishers.publishIMU(new_imu_msg);
-  }
+  common_handlers_->publishers.publishIMU(new_imu_msg);
 }
 
 //}
@@ -1233,20 +1224,17 @@ void MrsUavPx4Api::callbackMagnetometer(const std_msgs::msg::Float64::ConstShare
 
   RCLCPP_INFO_ONCE(node_->get_logger(), "getting magnetometer heading");
 
-  if (_capabilities_.produces_magnetometer_heading) {
+  // Converting the value from MAVROS msg in NED degrees into ENU radians for consistency with other values.
+  // The Mavros heading angle is given in degrees from 0.0 to 359.99 degrees in the North-East-Down coordinate frame.
+  const auto global_heading_ned = mrs_lib::geometry::degrees::convert<mrs_lib::geometry::sradians>(msg->data).value();
+  const auto global_heading_enu = mrs_lib::geometry::headingNEDtoENU(global_heading_ned);
 
-    // Converting the value from MAVROS msg in NED degrees into ENU radians for consistency with other values.
-    // The Mavros heading angle is given in degrees from 0.0 to 359.99 degrees in the North-East-Down coordinate frame.
-    const auto global_heading_ned = mrs_lib::geometry::degrees::convert<mrs_lib::geometry::sradians>(msg->data).value();
-    const auto global_heading_enu = mrs_lib::geometry::headingNEDtoENU(global_heading_ned);
+  mrs_msgs::msg::Float64Stamped mag_out;
+  mag_out.header.stamp    = clock_->now();
+  mag_out.header.frame_id = _uav_name_ + "/" + _world_frame_name_;
+  mag_out.value           = global_heading_enu;
 
-    mrs_msgs::msg::Float64Stamped mag_out;
-    mag_out.header.stamp    = clock_->now();
-    mag_out.header.frame_id = _uav_name_ + "/" + _world_frame_name_;
-    mag_out.value           = global_heading_enu;
-
-    common_handlers_->publishers.publishMagnetometerHeading(mag_out);
-  }
+  common_handlers_->publishers.publishMagnetometerHeading(mag_out);
 }
 
 //}
@@ -1261,10 +1249,7 @@ void MrsUavPx4Api::callbackMagneticField(const sensor_msgs::msg::MagneticField::
 
   RCLCPP_INFO_ONCE(node_->get_logger(), "getting magnetic field");
 
-  if (_capabilities_.produces_magnetic_field) {
-
-    common_handlers_->publishers.publishMagneticField(*msg);
-  }
+  common_handlers_->publishers.publishMagneticField(*msg);
 }
 
 //}
@@ -1312,15 +1297,12 @@ void MrsUavPx4Api::callbackAltitude(const mavros_msgs::msg::Altitude::ConstShare
 
   RCLCPP_INFO_ONCE(node_->get_logger(), "getting Altitude");
 
-  if (_capabilities_.produces_altitude) {
+  mrs_msgs::msg::HwApiAltitude altitude_out;
 
-    mrs_msgs::msg::HwApiAltitude altitude_out;
+  altitude_out.stamp = msg->header.stamp;
+  altitude_out.amsl  = msg->amsl;
 
-    altitude_out.stamp = msg->header.stamp;
-    altitude_out.amsl  = msg->amsl;
-
-    common_handlers_->publishers.publishAltitude(altitude_out);
-  }
+  common_handlers_->publishers.publishAltitude(altitude_out);
 }
 
 //}
@@ -1335,34 +1317,31 @@ void MrsUavPx4Api::callbackGpsStatusRaw(const mavros_msgs::msg::GPSRAW::ConstSha
 
   RCLCPP_INFO_ONCE(node_->get_logger(), "getting Gps Status Raw");
 
-  if (_capabilities_.produces_gnss_status) {
+  mrs_msgs::msg::GpsInfo gps_info_out;
 
-    mrs_msgs::msg::GpsInfo gps_info_out;
+  gps_info_out.stamp    = msg->header.stamp; // [GPS_FIX_TYPE] GPS fix type
+  gps_info_out.fix_type = msg->fix_type;     // [GPS_FIX_TYPE] GPS fix type
 
-    gps_info_out.stamp    = msg->header.stamp; // [GPS_FIX_TYPE] GPS fix type
-    gps_info_out.fix_type = msg->fix_type;     // [GPS_FIX_TYPE] GPS fix type
+  gps_info_out.lat                = double(msg->lat) / 10000000; // [deg] Latitude (WGS84, EGM96 ellipsoid)
+  gps_info_out.lon                = double(msg->lon) / 10000000; // [deg] Longitude (WGS84, EGM96 ellipsoid)
+  gps_info_out.alt                = float(msg->alt) / 1000;      // [m]  (MSL). Positive for up. Not WGS84 altitude.
+  gps_info_out.eph                = msg->eph;                    // GPS HDOP horizontal dilution of position (unitless). If unknown, set to: UINT16_MAX
+  gps_info_out.epv                = msg->epv;                    // GPS VDOP vertical dilution of position (unitless). If unknown, set to: UINT16_MAX
+  gps_info_out.vel                = float(msg->vel) / 100;       // [m/s] GPS ground speed. If unknown, set to: UINT16_MAX
+  gps_info_out.cog                = float(msg->cog) / 100;       // [deg] Course over ground (NOT heading, but direction of movement), 0.0..359.99 degrees.
+  gps_info_out.satellites_visible = msg->satellites_visible;     // Number of satellites visible. If unknown, set to 255
 
-    gps_info_out.lat                = double(msg->lat) / 10000000; // [deg] Latitude (WGS84, EGM96 ellipsoid)
-    gps_info_out.lon                = double(msg->lon) / 10000000; // [deg] Longitude (WGS84, EGM96 ellipsoid)
-    gps_info_out.alt                = float(msg->alt) / 1000;      // [m]  (MSL). Positive for up. Not WGS84 altitude.
-    gps_info_out.eph                = msg->eph;                    // GPS HDOP horizontal dilution of position (unitless). If unknown, set to: UINT16_MAX
-    gps_info_out.epv                = msg->epv;                    // GPS VDOP vertical dilution of position (unitless). If unknown, set to: UINT16_MAX
-    gps_info_out.vel                = float(msg->vel) / 100;       // [m/s] GPS ground speed. If unknown, set to: UINT16_MAX
-    gps_info_out.cog                = float(msg->cog) / 100;       // [deg] Course over ground (NOT heading, but direction of movement), 0.0..359.99 degrees.
-    gps_info_out.satellites_visible = msg->satellites_visible;     // Number of satellites visible. If unknown, set to 255
+  gps_info_out.alt_ellipsoid = float(msg->alt_ellipsoid) / 1000; // [m] Altitude (above WGS84, EGM96 ellipsoid). Positive for up.
+  gps_info_out.h_acc         = float(msg->h_acc) / 1000;         // [m] Position uncertainty. Positive for up.
+  gps_info_out.v_acc         = float(msg->v_acc) / 1000;         // [m] Altitude uncertainty. Positive for up.
+  gps_info_out.vel_acc       = float(msg->vel_acc) / 1000;       // [m/s] Speed uncertainty. Positive for up.
+  gps_info_out.hdg_acc       = float(msg->hdg_acc) / 1000;       // [deg] Heading / track uncertainty
+  gps_info_out.yaw           = float(msg->yaw) / 100;            // [deg] Yaw in earth frame from north.
+  gps_info_out.dgps_num_sats = msg->dgps_numch;                  // Number of DGPS satellites
+  gps_info_out.dgps_age      = float(msg->dgps_age) / 1000;      // [s] Age of DGPS info
+  gps_info_out.baseline_dist = 0;                                // [m] distance to the basestation, not supported by the GPSRAW message
 
-    gps_info_out.alt_ellipsoid = float(msg->alt_ellipsoid) / 1000; // [m] Altitude (above WGS84, EGM96 ellipsoid). Positive for up.
-    gps_info_out.h_acc         = float(msg->h_acc) / 1000;         // [m] Position uncertainty. Positive for up.
-    gps_info_out.v_acc         = float(msg->v_acc) / 1000;         // [m] Altitude uncertainty. Positive for up.
-    gps_info_out.vel_acc       = float(msg->vel_acc) / 1000;       // [m/s] Speed uncertainty. Positive for up.
-    gps_info_out.hdg_acc       = float(msg->hdg_acc) / 1000;       // [deg] Heading / track uncertainty
-    gps_info_out.yaw           = float(msg->yaw) / 100;            // [deg] Yaw in earth frame from north.
-    gps_info_out.dgps_num_sats = msg->dgps_numch;                  // Number of DGPS satellites
-    gps_info_out.dgps_age      = float(msg->dgps_age) / 1000;      // [s] Age of DGPS info
-    gps_info_out.baseline_dist = 0;                                // [m] distance to the basestation, not supported by the GPSRAW message
-
-    common_handlers_->publishers.publishGNSSStatus(gps_info_out);
-  }
+  common_handlers_->publishers.publishGNSSStatus(gps_info_out);
 }
 
 //}
@@ -1377,10 +1356,7 @@ void MrsUavPx4Api::callbackBattery(const sensor_msgs::msg::BatteryState::ConstSh
 
   RCLCPP_INFO_ONCE(node_->get_logger(), "getting battery");
 
-  if (_capabilities_.produces_battery_state) {
-
-    common_handlers_->publishers.publishBatteryState(*msg);
-  }
+  common_handlers_->publishers.publishBatteryState(*msg);
 }
 
 //}
