@@ -137,10 +137,10 @@ private:
   std::string _body_frame_name_;
   std::string _world_frame_name_;
 
-  double _mavros_timeout_;
+  double _mavros_state_timeout_;
   // Needs a default value
   rclcpp::Duration _general_topic_timeout_ = rclcpp::Duration::from_seconds(1);
-  double           _mavros_passable_delay_;
+  double           _mavros_state_warning_delay_;
 
   bool _simulation_;
 
@@ -299,8 +299,8 @@ void MrsUavPx4Api::initialize(const rclcpp::Node::SharedPtr &node, std::shared_p
     local_param_loader.addYamlFile(config_file);
   }
 
-  local_param_loader.loadParam("mavros_timeout", _mavros_timeout_);
-  local_param_loader.loadParam("mavros_passable_delay", _mavros_passable_delay_);
+  local_param_loader.loadParam("mavros_state/timeout", _mavros_state_timeout_);
+  local_param_loader.loadParam("mavros_state/warning_delay", _mavros_state_warning_delay_);
 
   local_param_loader.loadParam("gnss/utm_x", _sim_rtk_utm_x_);
   local_param_loader.loadParam("gnss/utm_y", _sim_rtk_utm_y_);
@@ -804,7 +804,7 @@ void MrsUavPx4Api::timeoutMavrosState(void) {
 
   const auto time = clock_->now() - last_mavros_state_time;
 
-  if (time.seconds() > _mavros_timeout_) {
+  if (time.seconds() > _mavros_state_timeout_) {
 
     bool was_connected = false;
 
@@ -848,7 +848,7 @@ void MrsUavPx4Api::timeoutMavrosState(void) {
     return;
   }
 
-  if (time.seconds() > _mavros_passable_delay_) {
+  if (time.seconds() > _mavros_state_warning_delay_) {
 
     RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 1000,
                          "--------------------------------------------------------------------------------------------------------------");
