@@ -238,12 +238,14 @@ private:
                                       const std::string &topic, CbkMsg_T cbk_msg, error_type_t error_type, const std::string &error_msg) {
     const typename SubscriberHandler_T::message_callback_t message_callback = [this_ptr, cbk_msg](const auto &msg) { (this_ptr->*cbk_msg)(msg); };
 
+    // like mrs_lib's default timeout callback, no handler lock needed
     const typename SubscriberHandler_T::timeout_callback_t timeout_callback = [this_ptr, sh = &subscriber_handler, error_type,
-                                                                               error_msg]([[maybe_unused]] const auto &topic_name, const auto &last_msg) {
+                                                                               error_msg](const auto &topic_name, const auto &last_msg) {
       const rclcpp::Duration since_msg = this_ptr->clock_->now() - last_msg;
-      RCLCPP_WARN_STREAM(this_ptr->node_->get_logger(), "Did not receive any message from topic '" << sh->topicName() << "' for " << since_msg.seconds()
-                                                                                                   << "s (" << sh->getNumPublishers()
-                                                                                                   << " publishers on this topic)");
+      const std::string      resolved  = this_ptr->node_->get_node_topics_interface()->resolve_topic_name(topic_name);
+      RCLCPP_WARN_STREAM(this_ptr->node_->get_logger(), "Did not receive any message from topic '"
+                                                            << resolved << "' for " << std::to_string(since_msg.seconds()) << "s (" << sh->getNumPublishers()
+                                                            << " QoS-compatible publishers on this topic)");
       this_ptr->error_publisher_->addGeneralError(error_type, error_msg);
     };
 
