@@ -9,7 +9,6 @@
 /* #include <mrs_modules_msgs/Bestpos.h> */
 
 #include <nav_msgs/msg/odometry.hpp>
-#include <std_srvs/srv/set_bool.hpp>
 
 #include <mrs_lib/param_loader.h>
 #include <mrs_lib/attitude_converter.h>
@@ -17,7 +16,6 @@
 #include <mrs_lib/publisher_handler.h>
 #include <mrs_lib/subscriber_handler.h>
 #include <mrs_lib/service_client_handler.h>
-#include <mrs_lib/service_server_handler.h>
 #include <mrs_lib/gps_conversions.h>
 #include <mrs_lib/geometry/cyclic.h>
 #include <mrs_lib/geometry/misc.h>
@@ -82,7 +80,6 @@ public:
   rclcpp::Clock::SharedPtr clock_;
 
   rclcpp::CallbackGroup::SharedPtr callback_group_;
-  rclcpp::CallbackGroup::SharedPtr cbkgrp_ss_;
 
   // | --------------------- status methods --------------------- |
 
@@ -162,9 +159,6 @@ private:
   mrs_lib::ServiceClientHandler<mavros_msgs::srv::CommandLong> sch_mavros_command_long_;
   mrs_lib::ServiceClientHandler<mavros_msgs::srv::SetMode>     sch_mavros_mode_;
 
-  // | --------------------- service servers -------------------- |
-  mrs_lib::ServiceServerHandler<std_srvs::srv::SetBool> ssh_ignore_ground_truth_;
-
   // | ----------------------- subscribers ---------------------- |
 
   mrs_lib::SubscriberHandler<nav_msgs::msg::Odometry>         sh_ground_truth_;
@@ -196,7 +190,6 @@ private:
   void callbackAltitude(const mavros_msgs::msg::Altitude::ConstSharedPtr msg);
   void callbackGpsStatusRaw(const mavros_msgs::msg::GPSRAW::ConstSharedPtr msg);
   void callbackBattery(const sensor_msgs::msg::BatteryState::ConstSharedPtr msg);
-  bool callbackIgnoreGroundTruth(const std_srvs::srv::SetBool::Request::SharedPtr request, std_srvs::srv::SetBool::Response::SharedPtr response);
   /* void                                                 callbackRTK(const mrs_modules_msgs::msg::Bestpos::ConstSharedPtr msg); */
 
   void initSubscribers();
@@ -275,7 +268,6 @@ void MrsUavPx4Api::initialize(const rclcpp::Node::SharedPtr &node, std::shared_p
   _world_frame_name_ = common_handlers->getWorldFrameName();
 
   callback_group_ = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
-  cbkgrp_ss_      = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
 
   last_mavros_state_time_ = rclcpp::Time(0, 0, clock_->get_clock_type());
   connected_since_        = rclcpp::Time(0, 0, clock_->get_clock_type());
@@ -340,13 +332,6 @@ void MrsUavPx4Api::initialize(const rclcpp::Node::SharedPtr &node, std::shared_p
   sch_mavros_command_long_ = mrs_lib::ServiceClientHandler<mavros_msgs::srv::CommandLong>(node_, "~/mavros_cmd_out", callback_group_);
   sch_mavros_mode_         = mrs_lib::ServiceClientHandler<mavros_msgs::srv::SetMode>(node_, "~/mavros_set_mode_out", callback_group_);
 
-
-  // | --------------------- service server -------------------- |
-  if (_capabilities_.produces_ground_truth || _capabilities_.produces_rtk) {
-    ssh_ignore_ground_truth_ = mrs_lib::ServiceServerHandler<std_srvs::srv::SetBool>(
-        node_, "~/ignore_ground_truth_in", [this](const auto &request, const auto &response) { return this->callbackIgnoreGroundTruth(request, response); },
-        rclcpp::SystemDefaultsQoS(), cbkgrp_ss_);
-  }
 
   // | ------------------------- topics ------------------------- |
 
@@ -1435,25 +1420,6 @@ void MrsUavPx4Api::callbackGroundTruth(const nav_msgs::msg::Odometry::ConstShare
 
     common_handlers_->publishers.publishRTK(rtk);
   }
-}
-
-//}
-
-// callbackIgnoreGroundTruth() //{ */
-
-bool MrsUavPx4Api::callbackIgnoreGroundTruth(const std_srvs::srv::SetBool::Request::SharedPtr req, std_srvs::srv::SetBool::Response::SharedPtr resp) {
-
-  if (req->data) {
-    resp->message = "Stopping subscriber of ground_truth.";
-    RCLCPP_INFO(node_->get_logger(), "%s'", resp->message.c_str());
-    sh_ground_truth_.stop();
-  } else {
-    resp->message = "Starting subscriber of ground_truth.";
-    RCLCPP_INFO(node_->get_logger(), "%s'", resp->message.c_str());
-    sh_ground_truth_.start();
-  }
-  resp->success = true;
-  return true;
 }
 
 //}
