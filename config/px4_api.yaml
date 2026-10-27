@@ -1,8 +1,9 @@
 hw_interface_plugin: "mrs_uav_px4_api::MrsUavPx4Api"
 plugin:
 
-  mavros_timeout: 1.0 # [s]
-  mavros_passable_delay: 0.05 # [s]
+  mavros_state:
+    timeout: 1.0 # [s]
+    warning_delay: 0.05 # [s]
   
   gnss:
     utm_zone: "32T"
