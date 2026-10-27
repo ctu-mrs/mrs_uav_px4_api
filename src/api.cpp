@@ -79,7 +79,9 @@ public:
   rclcpp::Node::SharedPtr  node_;
   rclcpp::Clock::SharedPtr clock_;
 
-  rclcpp::CallbackGroup::SharedPtr callback_group_;
+  rclcpp::CallbackGroup::SharedPtr cbkgrp_subs_;
+  rclcpp::CallbackGroup::SharedPtr cbkgrp_sc_;
+  rclcpp::CallbackGroup::SharedPtr cbkgrp_timers_;
 
   // | --------------------- status methods --------------------- |
 
@@ -267,7 +269,9 @@ void MrsUavPx4Api::initialize(const rclcpp::Node::SharedPtr &node, std::shared_p
   _body_frame_name_  = common_handlers->getBodyFrameName();
   _world_frame_name_ = common_handlers->getWorldFrameName();
 
-  callback_group_ = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+  cbkgrp_subs_   = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+  cbkgrp_sc_     = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+  cbkgrp_timers_ = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
 
   last_mavros_state_time_ = rclcpp::Time(0, 0, clock_->get_clock_type());
   connected_since_        = rclcpp::Time(0, 0, clock_->get_clock_type());
@@ -329,8 +333,8 @@ void MrsUavPx4Api::initialize(const rclcpp::Node::SharedPtr &node, std::shared_p
 
   // | --------------------- service clients -------------------- |
 
-  sch_mavros_command_long_ = mrs_lib::ServiceClientHandler<mavros_msgs::srv::CommandLong>(node_, "~/mavros_cmd_out", callback_group_);
-  sch_mavros_mode_         = mrs_lib::ServiceClientHandler<mavros_msgs::srv::SetMode>(node_, "~/mavros_set_mode_out", callback_group_);
+  sch_mavros_command_long_ = mrs_lib::ServiceClientHandler<mavros_msgs::srv::CommandLong>(node_, "~/mavros_cmd_out", cbkgrp_sc_);
+  sch_mavros_mode_         = mrs_lib::ServiceClientHandler<mavros_msgs::srv::SetMode>(node_, "~/mavros_set_mode_out", cbkgrp_sc_);
 
 
   // | ------------------------- topics ------------------------- |
@@ -348,7 +352,7 @@ void MrsUavPx4Api::initialize(const rclcpp::Node::SharedPtr &node, std::shared_p
 
     opts.node           = node_;
     opts.autostart      = true;
-    opts.callback_group = callback_group_;
+    opts.callback_group = cbkgrp_timers_;
 
     timer_main_ = std::make_shared<TimerType>(opts, rclcpp::Rate(10.0, clock_), callback_fcn);
   }
@@ -726,7 +730,7 @@ void MrsUavPx4Api::initSubscribers() {
   shopts.no_message_timeout                  = rclcpp::Duration::from_seconds(1.0);
   shopts.threadsafe                          = true;
   shopts.autostart                           = true;
-  shopts.subscription_options.callback_group = callback_group_;
+  shopts.subscription_options.callback_group = cbkgrp_subs_;
   shopts.qos                                 = qos_profile;
 
   if (_capabilities_.produces_ground_truth || _capabilities_.produces_rtk) {
