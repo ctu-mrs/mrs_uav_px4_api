@@ -829,11 +829,12 @@ void MrsUavPx4Api::timeoutMavrosState(void) {
     return;
   }
 
-  if (!sh_mavros_state_.hasMsg()) {
+  auto last_mavros_state_time = mrs_lib::get_mutexed(mutex_last_mavros_state_time_, last_mavros_state_time_);
+
+  // no connected state processed yet
+  if (last_mavros_state_time.nanoseconds() == 0) {
     return;
   }
-
-  auto last_mavros_state_time = mrs_lib::get_mutexed(mutex_last_mavros_state_time_, last_mavros_state_time_);
 
   const auto time = clock_->now() - last_mavros_state_time;
 
