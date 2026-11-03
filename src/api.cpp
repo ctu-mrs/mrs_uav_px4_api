@@ -119,6 +119,7 @@ private:
   {
     not_receiving_mavros_state,
     not_receiving_outputs,
+    no_mavros_subscriber,
   };
 
   std::shared_ptr<mrs_lib::errorgraph::ErrorPublisher> error_publisher_;
@@ -199,6 +200,7 @@ private:
 
   void timeoutMavrosState(void);
   void checkOutputs(void);
+  void checkInputs(void);
 
   uint8_t airborne(const bool connected);
 
@@ -242,6 +244,10 @@ private:
 
   std::vector<checked_topic_t> checked_topics_;
   rclcpp::Time                 topics_since_; // the first valid time of the main timer, the reference for the topics without a message
+
+  // the last Mavros state when the input lost its subscriber, used only by checkInputs()
+  std::optional<rclcpp::Time> attitude_no_subscriber_since_;
+  std::optional<rclcpp::Time> actuator_control_no_subscriber_since_;
 
   template <class SubscriberHandler_T>
   void addCheckedTopic(SubscriberHandler_T &subscriber_handler, const bool from_fcu, const rclcpp::Duration &timeout) {
@@ -876,6 +882,63 @@ void MrsUavPx4Api::checkOutputs(void) {
   if (!not_receiving.empty()) {
     RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 1000, "%s", not_receiving.c_str());
     error_publisher_->addGeneralError(error_type_t::not_receiving_outputs, not_receiving);
+  }
+}
+
+//}
+
+/* checkInputs() //{ */
+
+// reports the requested inputs whose Mavros topic has no subscriber, i.e. the commands are dropped
+void MrsUavPx4Api::checkInputs(void) {
+
+  bool         connected;
+  rclcpp::Time last_state;
+
+  // together, the Mavros state callback sets both under mutex_status_
+  {
+    std::scoped_lock lock(mutex_status_);
+
+    connected  = connected_;
+    last_state = mrs_lib::get_mutexed(mutex_last_mavros_state_time_, last_mavros_state_time_);
+  }
+
+  if (!connected) {
+    attitude_no_subscriber_since_.reset();
+    actuator_control_no_subscriber_since_.reset();
+    return;
+  }
+
+  std::string no_subscriber;
+
+  const auto check = [&no_subscriber, &last_state, this](auto &publisher_handler, std::optional<rclcpp::Time> &since, const std::string &plugin) {
+    if (publisher_handler.getNumSubscribers() > 0) {
+      since.reset();
+      return;
+    }
+
+    if (!since) {
+      since = last_state;
+    }
+
+    // aged at the last Mavros state: a dead Mavros is reported only as the connection
+    if (last_state - *since > _topic_timeout_default_) {
+      no_subscriber +=
+          (no_subscriber.empty() ? "No Mavros subscriber on " : ", ") + publisher_handler.topicName() + " (is " + plugin + " in plugin_allowlist?)";
+    }
+  };
+
+  if (_capabilities_.accepts_attitude_cmd || _capabilities_.accepts_attitude_rate_cmd) {
+    check(ph_mavros_attitude_target_, attitude_no_subscriber_since_, "setpoint_raw");
+  }
+
+  if (_capabilities_.accepts_control_group_cmd) {
+    check(ph_mavros_actuator_control_, actuator_control_no_subscriber_since_, "actuator_control");
+  }
+
+  if (!no_subscriber.empty()) {
+    RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 1000, "%s", no_subscriber.c_str());
+    error_publisher_->addGeneralError(error_type_t::no_mavros_subscriber, no_subscriber);
   }
 }
 
@@ -1566,6 +1629,8 @@ void MrsUavPx4Api::timerMain() {
   timeoutMavrosState();
 
   checkOutputs();
+
+  checkInputs();
 }
 
 //}
