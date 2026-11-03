@@ -1481,7 +1481,7 @@ void MrsUavPx4Api::timerMain() {
     return;
   }
 
-  RCLCPP_INFO_ONCE(node_->get_logger(), "main timer spinning");
+  RCLCPP_INFO_ONCE(node_->get_logger(), "timerMain() spinning");
 
   timeoutMavrosState();
 }
