@@ -36,6 +36,7 @@
 #include <mavros_msgs/msg/actuator_control.hpp>
 #include <mavros_msgs/msg/gpsraw.hpp>
 
+#include <atomic>
 #include <format>
 #include <string>
 //}
@@ -108,7 +109,7 @@ public:
   std::tuple<bool, std::string> callbackOffboard(void);
 
 private:
-  bool is_initialized_ = false;
+  std::atomic<bool> is_initialized_ = false;
 
   // | -------------------- errorgraph ------------------- |
   enum class error_type_t : uint16_t
