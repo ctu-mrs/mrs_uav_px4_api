@@ -395,11 +395,10 @@ mrs_msgs::msg::HwApiStatus MrsUavPx4Api::getStatus() {
 
   mrs_msgs::msg::HwApiStatus status;
 
-  status.stamp = clock_->now();
-
   {
     std::scoped_lock lock(mutex_status_);
 
+    status.stamp     = clock_->now();
     status.armed     = armed_;
     status.offboard  = offboard_;
     status.connected = connected_;
@@ -995,14 +994,12 @@ void MrsUavPx4Api::timeoutMavrosState(void) {
     // publish once on the connected -> disconnected transition; HwApiManager republishes at 1 Hz afterwards
     if (was_connected) {
 
-      rclcpp::Time timestamp = clock_->now();
-
       mrs_msgs::msg::HwApiStatus status;
 
       {
         std::scoped_lock lock(mutex_status_);
 
-        status.stamp     = timestamp;
+        status.stamp     = clock_->now();
         status.armed     = armed_;
         status.offboard  = offboard_;
         status.connected = connected_;
@@ -1148,14 +1145,12 @@ void MrsUavPx4Api::callbackMavrosState(const mavros_msgs::msg::State::ConstShare
 
   // | ----------------- publish the diagnostics ---------------- |
 
-  rclcpp::Time timestamp = clock_->now();
-
   mrs_msgs::msg::HwApiStatus status;
 
   {
     std::scoped_lock lock(mutex_status_);
 
-    status.stamp     = timestamp;
+    status.stamp     = clock_->now();
     status.armed     = armed_;
     status.offboard  = offboard_;
     status.connected = connected_;
