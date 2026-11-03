@@ -844,6 +844,11 @@ void MrsUavPx4Api::timeoutMavrosState(void) {
     {
       std::scoped_lock lock(mutex_status_);
 
+      // a new state arrived meanwhile
+      if (mrs_lib::get_mutexed(mutex_last_mavros_state_time_, last_mavros_state_time_) != last_mavros_state_time) {
+        return;
+      }
+
       was_connected = connected_;
 
       connected_ = false;
@@ -993,16 +998,20 @@ void MrsUavPx4Api::callbackMavrosState(const mavros_msgs::msg::State::ConstShare
 
   } else {
 
+    const rclcpp::Time now = clock_->now();
+
     std::scoped_lock lock(mutex_status_);
 
     if (!connected_) {
-      connected_since_ = clock_->now();
+      connected_since_ = now;
     }
 
     offboard_  = msg->mode == "OFFBOARD";
     armed_     = msg->armed;
     connected_ = true;
     mode_      = msg->mode;
+
+    mrs_lib::set_mutexed(mutex_last_mavros_state_time_, now, last_mavros_state_time_);
   }
 
   // | ----------------- publish the diagnostics ---------------- |
@@ -1020,10 +1029,6 @@ void MrsUavPx4Api::callbackMavrosState(const mavros_msgs::msg::State::ConstShare
     status.connected = connected_;
     status.airborne  = airborne(status.connected);
     status.mode      = mode_;
-  }
-
-  if (msg->connected) {
-    mrs_lib::set_mutexed(mutex_last_mavros_state_time_, timestamp, last_mavros_state_time_);
   }
 
   common_handlers_->publishers.publishStatus(status);
