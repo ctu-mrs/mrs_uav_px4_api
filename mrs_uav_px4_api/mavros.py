@@ -1,7 +1,6 @@
 """MAVROS settings and nodes for launch/api.launch.py"""
 
 import os
-import re
 
 from launch.actions import SetLaunchConfiguration
 from launch.substitutions import LaunchConfiguration
@@ -27,20 +26,18 @@ def mavros_config_path(context):
 # #}
 
 
-# #{ mavros_settings(context, simulation, old_px4_fw, uav_name, custom_config, this_pkg_path)
-def mavros_settings(context, simulation, old_px4_fw, uav_name, custom_config, this_pkg_path):
-    '''MAVROS connection and config files: the connection follows from the run type and UAV_NAME, the mavros_* launch args override it'''
+# #{ mavros_settings(context, simulation, old_px4_fw, vehicle, custom_config, this_pkg_path)
+def mavros_settings(context, simulation, old_px4_fw, vehicle, custom_config, this_pkg_path):
+    '''MAVROS connection and config files: the connection follows from the run type and the Gazebo spawner's vehicle,
+    the mavros_* launch args override it'''
 
     if simulation:
-        # the Gazebo spawner names vehicles uav<ID>, each uses the UDP ports from 14000 + 4 * ID and MAV_SYS_ID = ID + 1
+        # without the spawner status (spawner_status:=false, vehicle None) the mavros_* launch args have to be set
         fcu_url = None
         tgt_system = None
-        match = re.search(r'(\d+)$', uav_name)
-        if match:
-            uav_id = int(match.group(1))
-            port = 14000 + 4 * uav_id
-            fcu_url = f'udp://127.0.0.1:{port + 1}@127.0.0.1:{port}'
-            tgt_system = str(uav_id + 1)
+        if vehicle is not None:
+            fcu_url = vehicle.mavlink_fcu_url
+            tgt_system = str(vehicle.mavlink_system_id)
         gcs_url = ''
         # PX4 SITL reports the simulated Garmin as ROTATION_CUSTOM
         garmin_id = '0'
@@ -72,7 +69,7 @@ def mavros_settings(context, simulation, old_px4_fw, uav_name, custom_config, th
 
     missing = [name for name, value in [('mavros_fcu_url', fcu_url), ('mavros_tgt_system', tgt_system)] if value is None]
     if missing:
-        raise RuntimeError(f'cannot derive the vehicle ID from UAV_NAME "{uav_name}" (no trailing digits), set {" and ".join(missing)}')
+        raise RuntimeError(f'no Gazebo spawner status (spawner_status:=false), set {" and ".join(missing)}')
 
     config_files = [this_pkg_path + '/config/mavros_px4_config.yaml']
     if custom_config:
