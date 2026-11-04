@@ -17,6 +17,7 @@ from launch.substitutions import (
 
 from ament_index_python.packages import get_package_share_directory
 
+from mrs_uav_px4_api.gazebo_spawner import wait_for_spawned_vehicle, spawner_configs
 from mrs_uav_px4_api.mavros import mavros_config_path, mavros_settings, mavros_components, mavros_standalone, mavros_namespace_rules
 
 
@@ -25,8 +26,16 @@ def hw_api_container(context, uav_name, use_sim_time, old_px4_fw, configs, custo
 
     in_container = context.perform_substitution(LaunchConfiguration('standalone')).lower() != 'true'
     simulation = context.perform_substitution(simulation).lower() == 'true'
+    spawner_status = context.perform_substitution(LaunchConfiguration('spawner_status')).lower() == 'true'
+    mavros_config = mavros_config_path(context)
 
-    mavros = mavros_settings(context, simulation, old_px4_fw, uav_name, mavros_config_path(context), this_pkg_path)
+    # in simulation, the vehicle's HW API outputs and MAVLink connection come from the Gazebo spawner
+    vehicle = None
+    if simulation and spawner_status:
+        vehicle = wait_for_spawned_vehicle(uav_name)
+        configs = spawner_configs(vehicle, configs)
+
+    mavros = mavros_settings(context, simulation, old_px4_fw, vehicle, mavros_config, this_pkg_path)
 
     container_options = {}
 
@@ -202,7 +211,13 @@ def generate_launch_description():
         description='MAVROS executor type (MAVROS_EXECUTOR_TYPE): events or mt',
     ))
 
-    # "auto" derives the value from the run type and UAV_NAME
+    ld.add_action(DeclareLaunchArgument(
+        'spawner_status',
+        default_value='true',
+        description='In simulation, wait for the vehicle in the Gazebo spawner status and take its HW API outputs and MAVLink connection from it',
+    ))
+
+    # "auto" takes the value from the run type and the Gazebo spawner status
     ld.add_action(DeclareLaunchArgument('mavros_fcu_url', default_value='auto', description='FCU URL used by MAVROS'))
     ld.add_action(DeclareLaunchArgument('mavros_gcs_url', default_value='auto', description='GCS URL used by MAVROS'))
     ld.add_action(DeclareLaunchArgument('mavros_tgt_system', default_value='auto', description='Target system ID for MAVROS'))
