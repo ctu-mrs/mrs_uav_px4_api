@@ -2,12 +2,11 @@
 
 import launch
 import os
-import re
 
-from launch_ros.actions import ComposableNodeContainer, Node
+from launch_ros.actions import ComposableNodeContainer
 from launch_ros.descriptions import ComposableNode
 from launch_ros.parameter_descriptions import ParameterFile
-from launch.actions import DeclareLaunchArgument, OpaqueFunction, SetLaunchConfiguration
+from launch.actions import DeclareLaunchArgument, OpaqueFunction
 from launch.substitutions import (
     LaunchConfiguration,
     IfElseSubstitution,
@@ -18,190 +17,17 @@ from launch.substitutions import (
 
 from ament_index_python.packages import get_package_share_directory
 
-def mavros_settings(context, uav_name, this_pkg_path):
-    '''MAVROS connection settings, "auto" args are derived from the run type and UAV_NAME'''
-
-    simulation = context.perform_substitution(LaunchConfiguration('simulation')).lower() == 'true'
-    old_px4_fw = os.getenv('OLD_PX4_FW', 'false') == 'true'
-    px4_ip = os.getenv('PX4_IP', '')
-
-    def arg_or_default(name, default):
-        value = context.perform_substitution(LaunchConfiguration(name))
-        return default if value == 'auto' else value
-
-    if simulation:
-        # the Gazebo spawner names vehicles uav<ID>, vehicle_base_port 14000, 4 ports per vehicle ID
-        match = re.search(r'(\d+)$', uav_name)
-        derived = [name for name in ['mavros_fcu_url', 'mavros_tgt_system'] if arg_or_default(name, None) is None]
-        if not match and derived:
-            # guessing an ID would silently connect to another vehicle's ports
-            raise RuntimeError(f'cannot derive the vehicle ID from UAV_NAME "{uav_name}" (no trailing digits), set {" and ".join(derived)}')
-        uav_id = int(match.group(1)) if match else 1
-        local_port = 14000 + 4 * uav_id
-        fcu_url = f'udp://127.0.0.1:{local_port + 1}@127.0.0.1:{local_port}'
-        gcs_url = ''
-        tgt_system = str(uav_id + 1)
-    else:
-        fcu_url = f'udp://:14550@{px4_ip}:14550' if px4_ip else '/dev/pixhawk:' + ('921600' if old_px4_fw else '2000000')
-        gcs_url = 'tcp-l://'
-        tgt_system = '1'
-
-    # PX4 SITL reports the simulated Garmin as ROTATION_CUSTOM
-    if simulation:
-        garmin_id = '0'
-        garmin_orientation = 'CUSTOM'
-    else:
-        garmin_id = '33' if old_px4_fw else '0'
-        garmin_orientation = '0' if old_px4_fw else 'PITCH_270'
-
-    # custom config is loaded on top of the package defaults, a relative path is relative to the current working directory
-    custom_config = context.perform_substitution(LaunchConfiguration('mavros_config'))
-    if custom_config:
-        custom_config = os.path.join(os.getenv('PWD', os.getcwd()), custom_config)
-        if not os.path.isfile(custom_config):
-            raise RuntimeError(f'mavros_config "{custom_config}" does not exist')
-
-    config_files = [this_pkg_path + '/config/mavros_px4_config.yaml']
-
-    if custom_config:
-        config_files.append(custom_config)
-
-    return {
-        'fcu_url': arg_or_default('mavros_fcu_url', fcu_url),
-        'gcs_url': arg_or_default('mavros_gcs_url', gcs_url),
-        'tgt_system': arg_or_default('mavros_tgt_system', tgt_system),
-        'garmin_id': garmin_id,
-        'garmin_orientation': garmin_orientation,
-        'plugins_file': this_pkg_path + '/config/mavros_plugins.yaml',
-        'config_files': config_files,
-    }
+from mrs_uav_px4_api.mavros import mavros_config_path, mavros_settings, mavros_components, mavros_standalone
 
 
-def mavros_common(mavros, uav_name):
-    '''Settings shared by the in-container and the standalone MAVROS'''
-
-    tgt_system = int(mavros['tgt_system'])
-    uas_url = f'/uas{tgt_system}'
-    frame_namespace = uav_name + '/mavros'
-
-    remappings = [
-        ('/diagnostics', 'mavros/diagnostics'),
-        (uas_url + '/mavlink_source', 'mavros/mavlink/source'),
-        (uas_url + '/mavlink_sink', 'mavros/mavlink/sink'),
-    ]
-
-    frame_ids = [
-        {'base_link_frame_id': frame_namespace + '/base_link'},
-        {'odom_frame_id': frame_namespace + '/odom'},
-        {'map_frame_id': frame_namespace + '/map'},
-    ]
-
-    # substitutions used in mavros_px4_config.yaml
-    launch_configurations = [
-        SetLaunchConfiguration('uav_name', uav_name),
-        SetLaunchConfiguration('frame_namespace', frame_namespace),
-        SetLaunchConfiguration('garmin_id', mavros['garmin_id']),
-        SetLaunchConfiguration('garmin_orientation', mavros['garmin_orientation']),
-    ]
-
-    return tgt_system, uas_url, remappings, frame_ids, launch_configurations
-
-
-def mavros_components(mavros, uav_name, use_sim_time):
-    '''MAVROS router + UAS as components of hw_api_container (mavros >= 2.16)'''
-
-    tgt_system, uas_url, remappings, frame_ids, launch_configurations = mavros_common(mavros, uav_name)
-
-    router_params = [
-        {'fcu_urls': [mavros['fcu_url']]},
-        {'uas_urls': [uas_url]},
-        {'use_sim_time': use_sim_time},
-    ]
-
-    if mavros['gcs_url']:
-        router_params.append({'gcs_urls': [mavros['gcs_url']]})
-
-    components = [
-
-        ComposableNode(
-            package='mavros',
-            plugin='mavros::router::Router',
-            namespace=uav_name,
-            name='mavros_router',
-            parameters=router_params,
-            remappings=remappings,
-            extra_arguments=[{'use_intra_process_comms': True}],
-        ),
-
-        # the UAS node is named "mavros", so the topics end up in /<uav_name>/mavros/...
-        ComposableNode(
-            package='mavros',
-            plugin='mavros::uas::UAS',
-            namespace=uav_name,
-            name='mavros',
-            # components don't get the container's parameter files (use_global_arguments(false)), so the UAS loads
-            # mavros_plugins.yaml (plugin_allowlist) and the config files itself,
-            # the explicit parameters below go last so the files can't override them
-            parameters=[
-                ParameterFile(mavros['plugins_file'], allow_substs=True),
-                *[ParameterFile(path, allow_substs=True) for path in mavros['config_files']],
-                {'uas_url': uas_url},
-                {'fcu_protocol': 'v2.0'},
-                {'system_id': tgt_system},
-                {'target_system_id': tgt_system},
-                {'target_component_id': 1},
-                *frame_ids,
-                {'use_sim_time': use_sim_time},
-            ],
-            remappings=remappings,
-            extra_arguments=[{'use_intra_process_comms': True}],
-        ),
-    ]
-
-    return components, launch_configurations
-
-
-def mavros_standalone(mavros, uav_name, use_sim_time):
-    '''MAVROS as a separate mavros_node process'''
-
-    tgt_system, _, remappings, frame_ids, launch_configurations = mavros_common(mavros, uav_name)
-
-    # topics end up in /<uav_name>/mavros/..., the UAS node ("mavros") adds the mavros namespace
-    # no name=, so the parameters are keyed by /** and reach the plugin nodes too
-    node = Node(
-        package='mavros',
-        executable='mavros_node',
-        namespace=uav_name,
-        output='screen',
-        respawn=os.getenv('respawn_mavros', 'false') == 'true',
-        respawn_delay=2.0,
-        additional_env={'MAVROS_EXECUTOR_TYPE': LaunchConfiguration('mavros_executor')},
-        # the explicit parameters go last so the files can't override them (same as in the container)
-        parameters=[
-            ParameterFile(mavros['plugins_file'], allow_substs=True),
-            *[ParameterFile(path, allow_substs=True) for path in mavros['config_files']],
-            {'fcu_url': mavros['fcu_url']},
-            {'gcs_url': mavros['gcs_url']},
-            {'tgt_system': tgt_system},
-            {'tgt_component': 1},
-            {'fcu_protocol': 'v2.0'},
-            {'use_sim_time': use_sim_time},
-            *frame_ids,
-        ],
-        remappings=remappings,
-    )
-
-    return launch_configurations + [node]
-
-
-def hw_api_container(context, uav_name, use_sim_time, configs, custom_config, platform_config, simulation, mavros_odometry_in_topic, this_pkg_path):
+# #{ hw_api_container(context, uav_name, use_sim_time, old_px4_fw, configs, custom_config, platform_config, simulation, mavros_odometry_in_topic, this_pkg_path)
+def hw_api_container(context, uav_name, use_sim_time, old_px4_fw, configs, custom_config, platform_config, simulation, mavros_odometry_in_topic, this_pkg_path):
 
     in_container = context.perform_substitution(LaunchConfiguration('standalone')).lower() != 'true'
     simulation = context.perform_substitution(simulation).lower() == 'true'
 
-    mavros = mavros_settings(context, uav_name, this_pkg_path)
+    mavros = mavros_settings(context, simulation, old_px4_fw, uav_name, mavros_config_path(context), this_pkg_path)
 
-    mavros_nodes = []
     container_options = {}
 
     if in_container:
@@ -214,7 +40,7 @@ def hw_api_container(context, uav_name, use_sim_time, configs, custom_config, pl
             'additional_env': {'MAVROS_EXECUTOR_TYPE': LaunchConfiguration('mavros_executor')},
         }
     else:
-        actions = mavros_standalone(mavros, uav_name, use_sim_time)
+        mavros_nodes, actions = mavros_standalone(mavros, uav_name, use_sim_time)
 
     hw_api_node = ComposableNode(
         package='mrs_uav_hw_api',
@@ -273,6 +99,9 @@ def hw_api_container(context, uav_name, use_sim_time, configs, custom_config, pl
     ))
 
     return actions
+
+
+# #}
 
 
 def generate_launch_description():
@@ -391,7 +220,7 @@ def generate_launch_description():
 
     ld.add_action(OpaqueFunction(
         function=hw_api_container,
-        args=[uav_name, use_sim_time, configs, custom_config, platform_config, simulation, mavros_odometry_in_topic, this_pkg_path],
+        args=[uav_name, use_sim_time, old_px4_fw, configs, custom_config, platform_config, simulation, mavros_odometry_in_topic, this_pkg_path],
     ))
 
     return ld
