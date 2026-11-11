@@ -4,6 +4,12 @@
   ros__parameters:
     startup_px4_usb_quirk: false
 
+# UAS
+/**/mavros:
+  ros__parameters:
+    tf.static_only: true  # no /tf, odometry needs only the static frames the UAS publishes;
+                          # set false in mavros_config if a plugin listens to tf (fake_gps, landing_target, vision_pose_estimate)
+
 # --- system plugins ---
 
 # sys_status
