@@ -17,7 +17,7 @@ from launch.substitutions import (
 
 from ament_index_python.packages import get_package_share_directory
 
-from mrs_uav_px4_api.mavros import mavros_config_path, mavros_settings, mavros_components, mavros_standalone
+from mrs_uav_px4_api.mavros import mavros_config_path, mavros_settings, mavros_components, mavros_standalone, mavros_namespace_rules
 
 
 # #{ hw_api_container(context, uav_name, use_sim_time, old_px4_fw, configs, custom_config, platform_config, simulation, mavros_odometry_in_topic, this_pkg_path)
@@ -36,7 +36,9 @@ def hw_api_container(context, uav_name, use_sim_time, old_px4_fw, configs, custo
             # mavros applies only the container's process-wide parameters to its plugin nodes,
             # they don't need mavros_plugins.yaml, the UAS loads it as a component
             'parameters': [ParameterFile(path, allow_substs=True) for path in mavros['config_files']],
-            'ros_arguments': ['-p', 'use_sim_time:=' + str(use_sim_time).lower()],
+            # the MAVROS plugin nodes go to /<uav_name>/mavros, the container stays in /<uav_name>
+            # (the components set their own namespace)
+            'ros_arguments': mavros_namespace_rules(uav_name, ['hw_api_container']) + ['-p', 'use_sim_time:=' + str(use_sim_time).lower()],
             'additional_env': {'MAVROS_EXECUTOR_TYPE': LaunchConfiguration('mavros_executor')},
         }
     else:

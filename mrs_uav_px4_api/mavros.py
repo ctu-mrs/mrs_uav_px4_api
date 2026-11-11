@@ -99,6 +99,20 @@ def mavros_remappings(mavros):
 # #}
 
 
+# #{ mavros_namespace_rules(uav_name, own_nodes)
+def mavros_namespace_rules(uav_name, own_nodes):
+    '''Namespace remaps for a process that runs MAVROS: MAVROS plugin nodes in /<uav_name>/mavros, own_nodes in /<uav_name>
+
+    The MAVROS plugin nodes take the process namespace (mavros >= 2.17), so the process namespace is /<uav_name>/mavros.
+    own_nodes are remapped back to /<uav_name> by node name. ROS uses the first matching remap, and these come before
+    the __ns:=/<uav_name> added by launch.'''
+    rules = []
+    for node in own_nodes:
+        rules += ['-r', f'{node}:__ns:=/{uav_name}']
+    return rules + ['-r', f'__ns:=/{uav_name}/mavros']
+# #}
+
+
 # #{ mavros_frame_ids(uav_name)
 def mavros_frame_ids(uav_name):
     '''TF frames of the vehicle, in the <uav_name>/mavros namespace'''
@@ -199,6 +213,8 @@ def mavros_standalone(mavros, uav_name, use_sim_time):
             *mavros_frame_ids(uav_name),
         ],
         remappings=mavros_remappings(mavros),
+        # the nodes mavros_node creates itself stay in /<uav_name>
+        ros_arguments=mavros_namespace_rules(uav_name, ['mavros_node', 'mavros_router', 'mavros']),
     )
 
     return [], mavros_launch_configurations(mavros, uav_name) + [node]
