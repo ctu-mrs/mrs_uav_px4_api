@@ -4,6 +4,12 @@
   ros__parameters:
     startup_px4_usb_quirk: false
 
+# UAS
+/**/mavros:
+  ros__parameters:
+    tf.static_only: true  # no /tf, odometry needs only the static frames the UAS publishes;
+                          # set false in mavros_config if a plugin listens to tf (fake_gps, landing_target, vision_pose_estimate)
+
 # --- system plugins ---
 
 # sys_status
@@ -134,6 +140,7 @@
 /**/mission:
   ros__parameters:
     pull_after_gcs: true        # update mission if gcs updates
+    pull_period: 0.0            # pull again once the mission is this old (s), 0 disables
     use_mission_item_int: true  # use the MISSION_ITEM_INT message instead of MISSION_ITEM
                                 # for uploading waypoints to FCU
 

@@ -56,6 +56,9 @@ foreach(DEP IN LISTS DEPENDENCIES)
   find_package(${DEP} REQUIRED)
 endforeach()
 
+# launch helpers (mrs_uav_px4_api/*.py), imported by launch/api.launch.py
+find_package(ament_cmake_python REQUIRED)
+
 include_directories(
   ${rclcpp_INCLUDE_DIRS}
   ${mrs_lib_INCLUDE_DIRS}
@@ -134,5 +137,7 @@ ament_export_targets(
 ament_export_dependencies(
   ${DEPENDENCIES}
 )
+
+ament_python_install_package(${PROJECT_NAME})
 
 ament_package()
