@@ -118,9 +118,11 @@ private:
   enum class error_type_t : uint16_t
   {
     not_receiving_mavros_state,
-    not_receiving_outputs,
     no_mavros_subscriber,
   };
+
+  // the expected publisher of the Mavros topics (Mavros itself doesn't report to the errorgraph)
+  inline static const mrs_lib::errorgraph::node_id_t mavros_node_id_{"mavros", "main"};
 
   std::shared_ptr<mrs_lib::errorgraph::ErrorPublisher> error_publisher_;
 
@@ -233,12 +235,12 @@ private:
   std::mutex                     mutex_angular_velocity_;
   geometry_msgs::msg::Vector3    angular_velocity_;
 
-  // the source topics of the requested outputs, checked by checkOutputs() and reported to the errorgraph together
+  // the source topics of the requested outputs, checked by checkOutputs()
   struct checked_topic_t
   {
     std::string                                  name;
     std::function<std::optional<rclcpp::Time>()> last_msg_time; // empty before the first message
-    bool                                         from_fcu;      // checked only while the FCU is connected
+    bool                                         from_fcu;      // checked only while the FCU is connected, published by Mavros
     rclcpp::Duration                             timeout;
   };
 
@@ -875,12 +877,16 @@ void MrsUavPx4Api::checkOutputs(void) {
 
     if (reference - since > topic.timeout) {
       not_receiving += (not_receiving.empty() ? "Not receiving " : ", ") + topic.name;
+      if (topic.from_fcu) {
+        error_publisher_->addWaitingForTopicError(topic.name, mavros_node_id_);
+      } else {
+        error_publisher_->addWaitingForTopicError(topic.name);
+      }
     }
   }
 
   if (!not_receiving.empty()) {
     RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 1000, "%s", not_receiving.c_str());
-    error_publisher_->addGeneralError(error_type_t::not_receiving_outputs, not_receiving);
   }
 }
 
@@ -963,7 +969,13 @@ void MrsUavPx4Api::timeoutMavrosState(void) {
   if (last_mavros_state_time.nanoseconds() == 0) {
 
     if ((clock_->now() - topics_since_).seconds() > _mavros_state_timeout_) {
-      report("No Mavros state (Mavros not running or FCU not connected)");
+      // Mavros publishes a disconnected state at its start
+      if (sh_mavros_state_.hasMsg()) {
+        report("FCU is not connected");
+      } else {
+        RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 1000, "No Mavros state (Mavros not running)");
+        error_publisher_->addWaitingForTopicError(sh_mavros_state_.topicName(), mavros_node_id_);
+      }
     }
 
     return;
